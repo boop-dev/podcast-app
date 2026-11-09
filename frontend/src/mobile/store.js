@@ -122,7 +122,29 @@ export async function getPosition(episodeId) {
 }
 
 export async function savePosition(episodeId, positionSeconds, completed) {
-  await stores.positions.setItem(episodeId, { position_seconds: positionSeconds, completed })
+  await stores.positions.setItem(episodeId, {
+    position_seconds: positionSeconds,
+    completed,
+    updated_at: Date.now(),
+  })
+}
+
+export async function putPositionRaw(episodeId, record) {
+  await stores.positions.setItem(episodeId, record)
+}
+
+/** All saved positions as [{episodeId, ...position}]. */
+export async function listPositions() {
+  const out = []
+  await stores.positions.iterate((value, key) => {
+    out.push({ episodeId: key, ...value })
+  })
+  return out
+}
+
+/** Every stored episode (used by the Home tab's "new" list). */
+export async function listAllEpisodes() {
+  return all(stores.episodes)
 }
 
 // --- queue ---------------------------------------------------------------

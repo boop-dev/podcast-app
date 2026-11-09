@@ -113,3 +113,24 @@ nav.tabs button.active { background: var(--ink); color: #fff; border-color: var(
 .player-controls button.on { background: var(--accent); border-color: var(--accent); }
 .player-controls select { font: inherit; border-radius: 8px; padding: 4px; background: #2a2a44; color: #fff; border: 1px solid #3a3a56; }
 .player-controls .sleep { margin-left: auto; font-size: 0.8rem; color: #b9b9cc; }
+
+.new-tag {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  background: #e0592a;
+  color: #fff;
+  vertical-align: middle;
+}
+h3 .new-tag { margin: 0 0 0 8px; }
+.episode.played h4 { opacity: 0.55; }
+
+h2.section { font-size: 15px; margin: 18px 0 8px; }
+.home-row { display: flex; gap: 12px; align-items: center; cursor: pointer; }
+.home-row img { width: 56px; height: 56px; border-radius: 8px; object-fit: cover; }
+.home-row h3 { margin: 0 0 2px; font-size: 15px; }
+.home-row p { margin: 0; }

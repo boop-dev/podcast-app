@@ -22,7 +22,7 @@
 
 import { Capacitor, CapacitorHttp } from '@capacitor/core'
 import { Directory, Filesystem } from '@capacitor/filesystem'
-import { buildOpmlXml } from './opml.js'
+import { buildOpmlXml, parseOpmlFeedUrls } from './opml.js'
 import { fetchFeed, httpGetJson } from './rss.js'
 import * as store from './store.js'
 
@@ -38,9 +38,22 @@ async function withState(ep) {
     ...ep,
     position_seconds: pos ? pos.position_seconds : 0,
     completed: pos ? Boolean(pos.completed) : false,
+    is_new: Boolean(ep.is_new) && !(pos && pos.completed),
     in_queue: queueOrder.includes(ep.id),
     downloaded: Boolean(download),
   }
+}
+
+// Once an episode of an auto-download show is finished, free its file.
+async function deleteDownloadIfAuto(ep) {
+  if (!ep) return
+  const show = await store.getShow(ep.show_id)
+  if (!show || !show.auto_download) return
+  const dl = await store.getDownload(ep.id)
+  if (dl && dl.path) {
+    await Filesystem.deleteFile({ path: dl.path, directory: Directory.Data }).catch(() => {})
+  }
+  if (dl) await store.removeDownload(ep.id)
 }
 
 export const mobileApi = {
@@ -69,7 +82,10 @@ export const mobileApi = {
     // Insert new episodes only; never clobber a stored episode's id.
     const stored = await store.listEpisodesForShow(show.id)
     const known = new Set(stored.map((ep) => ep.id))
-    const fresh = episodes.filter((ep) => !known.has(ep.id))
+    // First subscribe: the back catalogue is not "new". Re-subscribe: it is.
+    const fresh = episodes
+      .filter((ep) => !known.has(ep.id))
+      .map((ep) => ({ ...ep, is_new: Boolean(existing) }))
     await store.putEpisodes(fresh)
     const count = await store.countEpisodesForShow(show.id)
     return { ...show, episode_count: count, _isNew: !existing }
@@ -78,10 +94,16 @@ export const mobileApi = {
   async listShows() {
     const shows = await store.listShows()
     return Promise.all(
-      shows.map(async (show) => ({
-        ...show,
-        episode_count: await store.countEpisodesForShow(show.id),
-      })),
+      shows.map(async (show) => {
+        const episodes = await store.listEpisodesForShow(show.id)
+        let newCount = 0
+        for (const ep of episodes) {
+          if (!ep.is_new) continue
+          const pos = await store.getPosition(ep.id)
+          if (!(pos && pos.completed)) newCount++
+        }
+        return { ...show, episode_count: episodes.length, new_count: newCount }
+      }),
     )
   },
 
@@ -93,14 +115,44 @@ export const mobileApi = {
   async refreshShow(showId) {
     const show = await store.getShow(showId)
     if (!show) throw new Error('show not found')
-    const before = await store.countEpisodesForShow(showId)
     const { show: freshShow, episodes } = await fetchFeed(show.feed_url)
-    await store.putShow({ ...freshShow, id: showId })
+    // Keep per-show settings (auto_download) across a feed refresh.
+    await store.putShow({ ...show, ...freshShow, id: showId, auto_download: show.auto_download })
     const stored = await store.listEpisodesForShow(showId)
     const known = new Set(stored.map((ep) => ep.id))
-    await store.putEpisodes(episodes.filter((ep) => !known.has(ep.id)))
-    const after = await store.countEpisodesForShow(showId)
-    return { show_id: showId, new_episodes: after - before }
+    const fresh = episodes
+      .filter((ep) => !known.has(ep.id))
+      .map((ep) => ({ ...ep, is_new: true }))
+    await store.putEpisodes(fresh)
+    return {
+      show_id: showId,
+      new_episodes: fresh.length,
+      new_episode_ids: fresh.map((ep) => ep.id),
+    }
+  },
+
+  /** Clear the "new" flag on every episode of a show (user has seen them). */
+  async markShowSeen(showId) {
+    const episodes = await store.listEpisodesForShow(showId)
+    const flagged = episodes.filter((ep) => ep.is_new)
+    await store.putEpisodes(flagged.map((ep) => ({ ...ep, is_new: false })))
+    return { seen: flagged.length }
+  },
+
+  /** Mark one episode played (finished) or unplayed. */
+  async setPlayed(episodeId, played) {
+    await store.savePosition(episodeId, 0, Boolean(played))
+    const ep = await store.getEpisode(episodeId)
+    if (ep && ep.is_new) await store.putEpisodes([{ ...ep, is_new: false }])
+    if (played) await deleteDownloadIfAuto(ep)
+    return { completed: Boolean(played) }
+  },
+
+  async setAutoDownload(showId, enabled) {
+    const show = await store.getShow(showId)
+    if (!show) throw new Error('show not found')
+    await store.putShow({ ...show, auto_download: Boolean(enabled) })
+    return { auto_download: Boolean(enabled) }
   },
 
   async deleteShow(showId) {
@@ -132,6 +184,9 @@ export const mobileApi = {
       pos = 0 // finished: start from the top next time (backend rule)
     }
     await store.savePosition(episodeId, pos, done)
+    const ep = await store.getEpisode(episodeId)
+    if (ep && ep.is_new) await store.putEpisodes([{ ...ep, is_new: false }])
+    if (done) await deleteDownloadIfAuto(ep)
     return { position_seconds: pos, completed: done }
   },
 
@@ -183,6 +238,156 @@ export const mobileApi = {
   async unmarkDownloaded(episodeId) {
     await store.removeDownload(episodeId)
     return { removed: episodeId }
+  },
+
+  /** Home tab: episodes in progress (most recent first). */
+  async listContinue(limit = 10) {
+    const positions = (await store.listPositions())
+      .filter((p) => !p.completed && p.position_seconds > 10)
+      .sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0))
+    return this._withShow(positions.map((p) => p.episodeId), limit)
+  },
+
+  /** Home tab: unplayed episodes found by refreshes, newest first. */
+  async listNew(limit = 20) {
+    const eps = (await store.listAllEpisodes()).filter((ep) => ep.is_new)
+    eps.sort((a, b) => ((b.pub_date || '') < (a.pub_date || '') ? -1 : 1))
+    return this._withShow(eps.map((ep) => ep.id), limit)
+  },
+
+  async _withShow(ids, limit) {
+    const out = []
+    for (const id of ids) {
+      const ep = await store.getEpisode(id)
+      if (!ep) continue
+      const state = await withState(ep)
+      if (state.completed) continue
+      const show = await store.getShow(ep.show_id)
+      out.push({ ...state, show_title: show ? show.title : '', show_image: show ? show.image_url : null })
+      if (out.length >= limit) break
+    }
+    return out
+  },
+
+  /** Subscribe to every feed in an OPML file. Returns {added, failed}. */
+  async importOpml(xml) {
+    const urls = parseOpmlFeedUrls(xml)
+    let added = 0
+    const failed = []
+    for (const url of urls) {
+      try {
+        const r = await this.subscribe(url)
+        if (r._isNew) added++
+      } catch {
+        failed.push(url)
+      }
+    }
+    return { total: urls.length, added, failed }
+  },
+
+  /** Per-show download sizes: [{showId, title, count, bytes}] + total bytes. */
+  async storageUsage() {
+    const shows = await store.listShows()
+    const byShow = new Map(shows.map((s) => [s.id, { showId: s.id, title: s.title, count: 0, bytes: 0 }]))
+    for (const id of await store.listDownloadIds()) {
+      const dl = await store.getDownload(id)
+      const ep = await store.getEpisode(id)
+      if (!dl || !dl.path || !ep || !byShow.has(ep.show_id)) continue
+      let size = 0
+      try {
+        size = Number((await Filesystem.stat({ path: dl.path, directory: Directory.Data })).size) || 0
+      } catch {
+        /* file missing: counts as zero */
+      }
+      const row = byShow.get(ep.show_id)
+      row.count++
+      row.bytes += size
+    }
+    const rows = [...byShow.values()].filter((r) => r.count > 0).sort((a, b) => b.bytes - a.bytes)
+    return { rows, total: rows.reduce((n, r) => n + r.bytes, 0) }
+  },
+
+  /** Delete downloaded files. showId null = all shows; onlyPlayed keeps unfinished ones. */
+  async deleteDownloads({ showId = null, onlyPlayed = false } = {}) {
+    let removed = 0
+    for (const id of await store.listDownloadIds()) {
+      const ep = await store.getEpisode(id)
+      if (showId && (!ep || ep.show_id !== showId)) continue
+      if (onlyPlayed) {
+        const pos = await store.getPosition(id)
+        if (!(pos && pos.completed)) continue
+      }
+      const dl = await store.getDownload(id)
+      if (dl && dl.path) {
+        await Filesystem.deleteFile({ path: dl.path, directory: Directory.Data }).catch(() => {})
+      }
+      await store.removeDownload(id)
+      removed++
+    }
+    return { removed }
+  },
+
+  /** Everything needed to rebuild the library on a new install. Episodes
+   *  are re-fetched from the feeds; ids are deterministic, so positions
+   *  and the queue line up again. */
+  async buildBackup() {
+    const shows = await store.listShows()
+    const positions = {}
+    for (const p of await store.listPositions()) {
+      const { episodeId, ...rest } = p
+      positions[episodeId] = rest
+    }
+    return {
+      app: 'podcast-app',
+      version: 1,
+      created_at: new Date().toISOString(),
+      shows: shows.map((s) => ({ feed_url: s.feed_url, auto_download: Boolean(s.auto_download) })),
+      positions,
+      queue: await store.getQueueOrder(),
+    }
+  },
+
+  async saveBackupToFile() {
+    const backup = await this.buildBackup()
+    const stamp = new Date().toISOString().slice(0, 10)
+    const result = await Filesystem.writeFile({
+      path: `podcast-backup-${stamp}.json`,
+      data: JSON.stringify(backup),
+      directory: Directory.Documents,
+      encoding: 'utf8',
+    })
+    return result.uri
+  },
+
+  async restoreBackup(json) {
+    const backup = typeof json === 'string' ? JSON.parse(json) : json
+    if (!backup || backup.app !== 'podcast-app' || !Array.isArray(backup.shows)) {
+      throw new Error('Not a Podcast App backup file')
+    }
+    const failed = []
+    for (const s of backup.shows) {
+      try {
+        const show = await this.subscribe(s.feed_url)
+        if (s.auto_download) await this.setAutoDownload(show.id, true)
+      } catch {
+        failed.push(s.feed_url)
+      }
+    }
+    let restored = 0
+    for (const [id, rec] of Object.entries(backup.positions || {})) {
+      if (!(await store.getEpisode(id))) continue
+      const current = await store.getPosition(id)
+      if (!current || (rec.updated_at || 0) > (current.updated_at || 0)) {
+        await store.putPositionRaw(id, rec)
+        restored++
+      }
+    }
+    const queue = []
+    for (const id of backup.queue || []) {
+      if (await store.getEpisode(id)) queue.push(id)
+    }
+    if (queue.length) await store.setQueueOrder([...new Set([...(await store.getQueueOrder()), ...queue])])
+    return { shows: backup.shows.length - failed.length, failed, positions: restored, queued: queue.length }
   },
 
   /** OPML export: the XML string, built on-device from stored shows. */

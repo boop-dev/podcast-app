@@ -22,7 +22,7 @@
 
 import 'fake-indexeddb/auto'
 
-import { buildOpmlXml } from '../src/mobile/opml.js'
+import { buildOpmlXml, parseOpmlFeedUrls } from '../src/mobile/opml.js'
 import { parseDuration, parseFeedXml, textOf } from '../src/mobile/rss.js'
 import * as store from '../src/mobile/store.js'
 import { mobileApi } from '../src/mobile/api.js'
@@ -126,6 +126,63 @@ try {
   check('mobileApi.subscribe via CapacitorHttp', sub.id === show.id && sub.episode_count === episodes.length)
 } catch (err) {
   console.log(`SKIP  mobileApi over CapacitorHttp (expected without a native shell): ${err.message}`)
+}
+
+// --- 6. Played / new / auto-download state ---
+{
+  await store.putShow({ ...(await store.getShow(show.id)), id: show.id })
+  const [e1, e2] = (await store.listEpisodesForShow(show.id)).slice(-2)
+  await store.putEpisodes([{ ...e1, is_new: true }, { ...e2, is_new: true }])
+  let row = (await mobileApi.listShows()).find((x) => x.id === show.id)
+  check('new_count counts unplayed new episodes', row.new_count === 2, `new_count=${row.new_count}`)
+  await mobileApi.setPlayed(e1.id, true)
+  row = (await mobileApi.listShows()).find((x) => x.id === show.id)
+  check('marking played clears its new flag', row.new_count === 1)
+  const played = (await mobileApi.listEpisodes(show.id)).find((x) => x.id === e1.id)
+  check('episode reports completed after setPlayed', played.completed === true && played.is_new === false)
+  await mobileApi.setPlayed(e1.id, false)
+  check('setPlayed(false) marks unplayed', (await mobileApi.getPosition(e1.id)).completed === false)
+  await mobileApi.markShowSeen(show.id)
+  row = (await mobileApi.listShows()).find((x) => x.id === show.id)
+  check('markShowSeen clears new_count', row.new_count === 0)
+  await mobileApi.setAutoDownload(show.id, true)
+  check('auto_download setting persists', (await store.getShow(show.id)).auto_download === true)
+}
+
+// --- 7. OPML import + Home lists ---
+{
+  const urls = parseOpmlFeedUrls(buildOpmlXml(await store.listShows()))
+  check('OPML round trip yields the feed URL', urls.length === 1 && urls[0] === hit.feedUrl)
+  const nested = '<opml><body><outline text="g"><outline xmlUrl="https://a.test/f"/><outline xmlUrl="https://a.test/f"/><outline xmlUrl="ftp://x"/></outline></body></opml>'
+  check('OPML parse: nested, de-duplicated, http(s) only', parseOpmlFeedUrls(nested).join() === 'https://a.test/f')
+  const [a, b] = (await store.listEpisodesForShow(show.id)).slice(-2)
+  await store.putEpisodes([{ ...a, is_new: true }])
+  await mobileApi.savePosition(b.id, 300, 3000)
+  const cont = await mobileApi.listContinue()
+  check('listContinue returns in-progress episode with show title', cont.some((e) => e.id === b.id && e.show_title === show.title))
+  const nw = await mobileApi.listNew()
+  check('listNew returns new episode', nw.some((e) => e.id === a.id))
+}
+
+// --- 8. Backup / restore + storage ---
+{
+  const backup = await mobileApi.buildBackup()
+  check('backup lists the show and positions', backup.shows.length === 1 && Object.keys(backup.positions).length > 0)
+  const posIds = Object.keys(backup.positions)
+  await mobileApi.setAutoDownload(show.id, true)
+  const withAuto = await mobileApi.buildBackup()
+  check('backup keeps auto_download', withAuto.shows[0].auto_download === true)
+  await store.clearAll()
+  check('library empty after wipe', (await store.listShows()).length === 0)
+  const r = await mobileApi.restoreBackup(JSON.stringify(withAuto))
+  check('restore re-subscribes and restores positions', r.shows === 1 && r.positions > 0, JSON.stringify(r))
+  check('restored show keeps auto_download', (await store.listShows())[0].auto_download === true)
+  check('restored position matches', (await store.getPosition(posIds[0])) !== null)
+  let rejected = false
+  try { await mobileApi.restoreBackup('{"nope":1}') } catch { rejected = true }
+  check('restore rejects a non-backup file', rejected)
+  const usage = await mobileApi.storageUsage()
+  check('storageUsage runs with no downloads', usage.total === 0 && usage.rows.length === 0)
 }
 
 // --- cleanup: delete-show cascade ---

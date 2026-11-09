@@ -1,5 +1,19 @@
 apply plugin: 'com.android.application'
 
+// Stable signing key so every build installs over the previous one.
+def keystoreProps = new Properties()
+def keystoreFile = rootProject.file('keystore.properties')
+if (keystoreFile.exists()) keystoreProps.load(new FileInputStream(keystoreFile))
+
+// versionCode = number of git commits, so it rises with every commit.
+def gitCommitCount = {
+    try {
+        def p = ['git', 'rev-list', '--count', 'HEAD'].execute(null, rootProject.projectDir)
+        p.waitFor()
+        return p.text.trim().toInteger()
+    } catch (Exception e) { return 1 }
+}
+
 android {
     namespace = "dev.boop.podcastapp"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +21,8 @@ android {
         applicationId "dev.boop.podcastapp"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode gitCommitCount()
+        versionName "1.0.${gitCommitCount()}"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +30,22 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        shared {
+            if (keystoreFile.exists()) {
+                storeFile rootProject.file(keystoreProps['storeFile'])
+                storePassword keystoreProps['storePassword']
+                keyAlias keystoreProps['keyAlias']
+                keyPassword keystoreProps['keyPassword']
+            }
+        }
+    }
     buildTypes {
+        debug {
+            if (keystoreFile.exists()) signingConfig signingConfigs.shared
+        }
         release {
+            if (keystoreFile.exists()) signingConfig signingConfigs.shared
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

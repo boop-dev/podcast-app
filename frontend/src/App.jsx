@@ -2,14 +2,18 @@
  * The player state lives here so any view can start playback. */
 
 import { useCallback, useEffect, useState } from 'react'
-import { api } from './api'
+import { api, isNative } from './api'
+import { syncAll } from './mobile/sync'
 import Player from './components/Player'
 import Shows from './components/Shows'
 import SearchView from './components/SearchView'
 import QueueView from './components/QueueView'
+import Home from './components/Home'
+import Settings from './components/Settings'
 
 export default function App() {
-  const [view, setView] = useState('shows')
+  const [view, setView] = useState(isNative() ? 'home' : 'shows')
+  const [playTick, setPlayTick] = useState(0)
   const [shows, setShows] = useState([])
   const [queue, setQueue] = useState([])
   const [downloadedIds, setDownloadedIds] = useState(new Set())
@@ -43,6 +47,29 @@ export default function App() {
     refreshDownloads()
   }, [refreshShows, refreshQueue, refreshDownloads])
 
+  // Native only: refresh feeds (and auto-download) on start and on resume.
+  useEffect(() => {
+    if (!isNative()) return
+    let running = false
+    async function sync() {
+      if (running) return
+      running = true
+      try {
+        const res = await syncAll()
+        if (res) {
+          refreshShows()
+          refreshDownloads()
+        }
+      } finally {
+        running = false
+      }
+    }
+    sync()
+    const onVisible = () => document.visibilityState === 'visible' && sync()
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [refreshShows, refreshDownloads])
+
   function playEpisode(episode, showTitle = '') {
     setNowPlaying({ episode, showTitle, autoplay: true })
   }
@@ -73,6 +100,11 @@ export default function App() {
       </header>
 
       <nav className="tabs">
+        {isNative() && (
+          <button className={view === 'home' ? 'active' : ''} onClick={() => { setPlayTick((n) => n + 1); setView('home') }}>
+            Home
+          </button>
+        )}
         <button className={view === 'shows' ? 'active' : ''} onClick={() => setView('shows')}>
           Shows
         </button>
@@ -82,10 +114,25 @@ export default function App() {
         <button className={view === 'queue' ? 'active' : ''} onClick={() => setView('queue')}>
           Up Next ({queue.length})
         </button>
+        {isNative() && (
+          <button className={view === 'settings' ? 'active' : ''} onClick={() => setView('settings')}>
+            Settings
+          </button>
+        )}
       </nav>
 
       {error && <div className="error">{error}</div>}
 
+      {view === 'settings' && (
+        <Settings
+          onChanged={() => {
+            refreshShows()
+            refreshQueue()
+            refreshDownloads()
+          }}
+        />
+      )}
+      {view === 'home' && <Home onPlay={playEpisode} refreshKey={playTick} />}
       {view === 'shows' && (
         <Shows
           shows={shows}

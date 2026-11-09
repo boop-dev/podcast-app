@@ -30,6 +30,13 @@ export const api = {
       body: JSON.stringify({ position, duration, completed }),
     }),
 
+  setPlayed: (episodeId, played) =>
+    request(`/api/episodes/${episodeId}/position`, {
+      method: 'POST',
+      body: JSON.stringify({ position: 0, duration: null, completed: Boolean(played) }),
+    }),
+  markShowSeen: async () => ({ seen: 0 }), // "new" tracking is native-only
+
   listQueue: () => request('/api/queue'),
   addToQueue: (episodeId) =>
     request('/api/queue', { method: 'POST', body: JSON.stringify({ episodeId }) }),

@@ -84,6 +84,28 @@ podcast-app\frontend\android\app\build\outputs\apk\debug\app-debug.apk
 4. Open **Podcast App**. The first launch needs internet to search
    and fetch feeds.
 
+## Fast path: one command, USB install
+
+After the one-time setup above:
+
+```powershell
+cd frontend
+npm run apk             # build only
+npm run install:phone   # build, install over USB, launch
+```
+
+One-time phone setup: Settings > About phone > tap Build number 7 times,
+then Developer options > turn on USB debugging, plug in, and accept the
+"Allow USB debugging" prompt. `adb install -r` replaces the old app and
+keeps its data, with no unknown-source prompts.
+
+- `versionCode` is the git commit count, so each commit is a valid update.
+- Builds are signed with `frontend/android/podcast-app.jks` (password in
+  `keystore.properties`). Both are gitignored: **back them up**. A build
+  signed with a different key will not install over this one.
+- The script needs a JDK 21 (Capacitor 8). It looks in `~/.jdks`; set
+  `JAVA_HOME_FOR_GRADLE` to use another.
+
 ## Notes
 
 - **Your data lives on the phone.** Subscriptions, playback positions,

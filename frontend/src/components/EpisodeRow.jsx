@@ -2,6 +2,7 @@
  * and the Play / Queue / Download actions. */
 
 import { useState } from 'react'
+import { api } from '../api'
 import { downloadEpisode, removeDownload } from '../lib/downloads'
 
 export function formatDuration(totalSeconds) {
@@ -23,7 +24,7 @@ export function formatDate(iso) {
   })
 }
 
-export default function EpisodeRow({ episode, onPlay, inQueue, onToggleQueue, downloaded, onDownloadChanged }) {
+export default function EpisodeRow({ episode, onPlay, inQueue, onToggleQueue, downloaded, onDownloadChanged, onPlayedChanged }) {
   const [busy, setBusy] = useState(false)
   const progress =
     episode.duration_seconds && episode.position_seconds
@@ -43,9 +44,21 @@ export default function EpisodeRow({ episode, onPlay, inQueue, onToggleQueue, do
     }
   }
 
+  async function togglePlayed() {
+    try {
+      await api.setPlayed(episode.id, !episode.completed)
+      if (onPlayedChanged) onPlayedChanged()
+    } catch (err) {
+      alert(`Could not update: ${err.message}`)
+    }
+  }
+
   return (
-    <article className="episode">
-      <h4>{episode.title}</h4>
+    <article className={`episode${episode.completed ? ' played' : ''}`}>
+      <h4>
+        {episode.is_new && <span className="new-tag">NEW</span>}
+        {episode.title}
+      </h4>
       <div className="meta">
         {formatDate(episode.pub_date)}
         {episode.duration_seconds ? ` · ${formatDuration(episode.duration_seconds)}` : ''}
@@ -62,6 +75,9 @@ export default function EpisodeRow({ episode, onPlay, inQueue, onToggleQueue, do
         </button>
         <button onClick={toggleDownload} disabled={busy}>
           {downloaded ? 'Delete download' : 'Download'}
+        </button>
+        <button onClick={togglePlayed}>
+          {episode.completed ? 'Mark unplayed' : 'Mark played'}
         </button>
       </div>
       {progress > 0 && !episode.completed && (

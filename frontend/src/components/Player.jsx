@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
+import { MediaSession } from '@jofr/capacitor-media-session'
 import { api, audioUrl, resolveAudioSrc } from '../api'
 
 const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2]
@@ -74,6 +75,51 @@ export default function Player({ episode, showTitle, autoplay, onEnded }) {
     }
   }, [episode, autoplay])
 
+  // Lock-screen / notification controls and background playback.
+  // On Android this starts a foreground service while a session is
+  // "playing", which keeps the WebView audio alive with the screen off.
+  // Handlers read the live audio element, so they never go stale.
+  useEffect(() => {
+    if (!episode) return
+    const artwork = episode.image_url ? [{ src: episode.image_url }] : []
+    MediaSession.setMetadata({
+      title: episode.title,
+      artist: showTitle,
+      album: showTitle,
+      artwork,
+    }).catch(() => {})
+  }, [episode, showTitle])
+
+  useEffect(() => {
+    const audio = () => audioRef.current
+    const seekBy = (d) => {
+      const a = audio()
+      if (a) a.currentTime = Math.max(0, a.currentTime + d)
+    }
+    const handlers = {
+      play: () => audio()?.play(),
+      pause: () => audio()?.pause(),
+      seekbackward: (d) => seekBy(-(d?.seekOffset || 15)),
+      seekforward: (d) => seekBy(d?.seekOffset || 30),
+      seekto: (d) => {
+        const a = audio()
+        if (a && d?.seekTime != null) a.currentTime = d.seekTime
+      },
+    }
+    for (const [action, handler] of Object.entries(handlers)) {
+      MediaSession.setActionHandler({ action }, handler).catch(() => {})
+    }
+    return () => {
+      for (const action of Object.keys(handlers)) {
+        MediaSession.setActionHandler({ action }, null).catch(() => {})
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    MediaSession.setPlaybackState({ playbackState: isPlaying ? 'playing' : 'paused' }).catch(() => {})
+  }, [isPlaying])
+
   // Speed applies to the current audio element.
   useEffect(() => {
     if (audioRef.current) audioRef.current.playbackRate = speed
@@ -117,6 +163,13 @@ export default function Player({ episode, showTitle, autoplay, onEnded }) {
     const audio = audioRef.current
     if (!audio) return
     // Throttle: at most one save every 10 seconds while playing.
+    if (audio.duration > 0) {
+      MediaSession.setPositionState({
+        duration: audio.duration,
+        position: audio.currentTime,
+        playbackRate: audio.playbackRate || 1,
+      }).catch(() => {})
+    }
     if (audio.currentTime - lastSaved.current >= 10) {
       lastSaved.current = audio.currentTime
       savePosition(audio.currentTime)
