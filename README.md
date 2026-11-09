@@ -38,9 +38,11 @@ podcast-app/
     public/icons/     PWA icons
 ```
 
-**Backend** (`backend/app.py`): Flask, stdlib `sqlite3`, `feedparser`
-for RSS. Tables: `shows`, `episodes`, `positions`, `queue`,
-`downloads`. Notable endpoints:
+**Backend** (`backend/app.py`): Flask, `libsql_client` (see `backend/db.py`),
+`feedparser` for RSS. Tables: `shows`, `episodes`, `positions`, `queue`,
+`downloads`. `db.py` talks to SQLite through the libSQL client, so the
+same SQL works against a local file (development) or a Turso database
+(deployed). Notable endpoints:
 
 - `GET /api/search?q=...` — proxies the Apple Search API, returns
   `feedUrl` per show.
@@ -104,6 +106,42 @@ Storage on the phone and play offline.
 The database file is `backend/podcasts.db` (created on first run).
 Override with the `PODCAST_DB` env var, e.g. for a scratch database
 while testing: `PODCAST_DB=/tmp/test.db backend/venv/bin/python backend/app.py`.
+Local development needs no other env vars: with no `TURSO_DATABASE_URL`
+set, the app uses the local SQLite file exactly as before.
+
+## Deploy (Render + Turso)
+
+Render's free tier hosts the app for $0 and needs no credit card, but
+its filesystem is ephemeral: a local SQLite file is wiped on every
+redeploy, restart, and spin-down (free services sleep after 15 idle
+minutes). Render's own free Postgres also expires 30 days after
+creation. So the compute lives on Render and the data lives in Turso.
+
+**Turso** is hosted libSQL, which speaks the SQLite dialect, so the
+app's SQL works unchanged. Its free tier is 5 GB, 100 databases, no
+credit card; sign up with GitHub at turso.tech. Create one database
+and note two values from its dashboard:
+
+- `TURSO_DATABASE_URL` — the database URL, starting `libsql://`
+- `TURSO_AUTH_TOKEN` — a token for that database
+
+**Render** uses the Blueprint in `render.yaml` (a free Python web
+service). Create the service from this repo in the Render dashboard,
+then set `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` there — they are
+declared with `sync: false` in the Blueprint, so their values are
+never stored in the repo. The build installs the backend requirements
+and builds the frontend; the start command runs `python backend/app.py`,
+which serves the API and the built app on Render's `$PORT`. The app
+creates the tables in Turso on first start, so there is no separate
+migration step.
+
+Two free-tier behaviours to expect: the service spins down after
+15 minutes idle, so the first request after a pause takes up to about
+a minute to wake it; and the PWA's offline downloads live in the
+phone's Cache Storage, not in Turso, so they are unaffected.
+
+The Fly.io files (`Dockerfile`, `fly.toml`) are a separate deploy
+path and are left in place; nothing about them changed.
 
 ## Verified
 
