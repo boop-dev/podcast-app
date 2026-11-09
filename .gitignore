@@ -1,0 +1,12 @@
+# node / python artifacts
+node_modules/
+venv/
+__pycache__/
+*.pyc
+dist/
+*.db
+*.db-wal
+*.db-shm
+
+# OS / editor
+.DS_Store
