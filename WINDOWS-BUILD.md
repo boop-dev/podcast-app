@@ -1,8 +1,12 @@
-# Building the Android APK (Windows laptop) — DRAFT
+# Building the Android APK (Windows laptop)
 
 This builds a standalone Podcast App APK from the same codebase as the
 web app. No server needed: the APK talks directly to podcast feeds on
 the phone. Do these steps on the Windows laptop.
+
+> Steps verified end to end on the Windows laptop on 2026-11-09: the
+> debug APK built successfully after updating Android Studio to a
+> version supporting AGP 8.13.0 (see troubleshooting).
 
 > The first build downloads Gradle and the Android build tools, so it
 > takes a while (10–30 minutes on a slow connection). Later builds are
