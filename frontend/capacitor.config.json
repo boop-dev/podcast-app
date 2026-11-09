@@ -1,0 +1,5 @@
+{
+  "appId": "dev.boop.podcastapp",
+  "appName": "Podcast App",
+  "webDir": "dist"
+}

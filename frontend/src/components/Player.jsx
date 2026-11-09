@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
-import { api, audioUrl } from '../api'
+import { api, audioUrl, resolveAudioSrc } from '../api'
 
 const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2]
 const SLEEP_OPTIONS = [
@@ -31,13 +31,31 @@ export default function Player({ episode, showTitle, autoplay, onEnded }) {
   const sleepCountdown = useRef(null)
   const lastSaved = useRef(0)
 
-  // Load a new episode: restore the saved position, then play if asked.
+  // Load a new episode: resolve the audio source (a downloaded
+  // episode's local file on native, otherwise the normal audio URL),
+  // restore the saved position, then play if asked.
   useEffect(() => {
     const audio = audioRef.current
     if (!audio || !episode) return
     let cancelled = false
-    audio.src = audioUrl(episode)
-    audio.load()
+    resolveAudioSrc(episode)
+      .then((src) => {
+        if (cancelled) return
+        audio.src = src
+        audio.load()
+        if (autoplay) {
+          audio.play().catch(() => setIsPlaying(false))
+        }
+      })
+      .catch(() => {
+        // Fall back to the plain audio URL if resolution failed.
+        if (cancelled) return
+        audio.src = audioUrl(episode)
+        audio.load()
+        if (autoplay) {
+          audio.play().catch(() => setIsPlaying(false))
+        }
+      })
     api
       .getPosition(episode.id)
       .then(({ position_seconds }) => {
@@ -51,9 +69,6 @@ export default function Player({ episode, showTitle, autoplay, onEnded }) {
         audio.addEventListener('loadedmetadata', onReady)
       })
       .catch(() => {})
-    if (autoplay) {
-      audio.play().catch(() => setIsPlaying(false))
-    }
     return () => {
       cancelled = true
     }

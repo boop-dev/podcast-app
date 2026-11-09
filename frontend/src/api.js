@@ -1,51 +1,44 @@
-/* Thin client for the Flask backend. All calls are same-origin (/api),
- * proxied to the backend in dev and served by Flask in production. */
+/* API surface, platform-switched.
+ *
+ * Web (Flask backend / Termux / local dev): the original thin client in
+ * ./api.web.js — same-origin /api calls, audio through the /api/audio
+ * proxy. Nothing about that path changes.
+ *
+ * Native (Capacitor APK): the on-device layer in ./mobile/api.js —
+ * IndexedDB storage, CapacitorHttp feed fetching, direct audio URLs.
+ * Same method names and return shapes, so every component works
+ * unchanged against either backend.
+ *
+ * The switch is Capacitor.isNativePlatform(): true only inside the
+ * native shell. In a desktop browser, in `vite dev`, and in the
+ * Termux-served build it is false, so the web path is used.
+ */
 
-async function request(path, options = {}) {
-  const res = await fetch(path, {
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-    ...options,
-  })
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new Error(body.error || `Request failed: ${res.status}`)
-  }
-  return res.json()
-}
+import { Capacitor } from '@capacitor/core'
+import { api as webApi, audioUrl as webAudioUrl } from './api.web.js'
+import { isNative, mobileApi, mobileAudioUrl } from './mobile/api.js'
+import { resolveAudioSrc as resolveAudioSrcNative } from './mobile/downloads.js'
 
-export const api = {
-  search: (q) => request(`/api/search?q=${encodeURIComponent(q)}`),
-  subscribe: (feedUrl) =>
-    request('/api/subscribe', { method: 'POST', body: JSON.stringify({ feedUrl }) }),
-  listShows: () => request('/api/shows'),
-  listEpisodes: (showId) => request(`/api/shows/${showId}/episodes`),
-  refreshShow: (showId) =>
-    request(`/api/shows/${showId}/refresh`, { method: 'POST' }),
-  deleteShow: (showId) => request(`/api/shows/${showId}`, { method: 'DELETE' }),
+export { isNative }
 
-  getPosition: (episodeId) => request(`/api/episodes/${episodeId}/position`),
-  savePosition: (episodeId, position, duration, completed = false) =>
-    request(`/api/episodes/${episodeId}/position`, {
-      method: 'POST',
-      body: JSON.stringify({ position, duration, completed }),
-    }),
+export const api = Capacitor.isNativePlatform() ? mobileApi : webApi
 
-  listQueue: () => request('/api/queue'),
-  addToQueue: (episodeId) =>
-    request('/api/queue', { method: 'POST', body: JSON.stringify({ episodeId }) }),
-  removeFromQueue: (episodeId) => request(`/api/queue/${episodeId}`, { method: 'DELETE' }),
-  reorderQueue: (episodeIds) =>
-    request('/api/queue/reorder', { method: 'POST', body: JSON.stringify({ episodeIds }) }),
-
-  listDownloads: () => request('/api/downloads'),
-  markDownloaded: (episodeId) =>
-    request('/api/downloads', { method: 'POST', body: JSON.stringify({ episodeId }) }),
-  unmarkDownloaded: (episodeId) =>
-    request(`/api/downloads/${episodeId}`, { method: 'DELETE' }),
-}
-
-/** Audio goes through the backend proxy, which adds Range support and
- *  sidesteps CORS on podcast hosts that do not send CORS headers. */
+/** Sync audio src: web proxy URL, or the direct enclosure URL on native. */
 export function audioUrl(episode) {
-  return `/api/audio?url=${encodeURIComponent(episode.audio_url)}`
+  return Capacitor.isNativePlatform() ? mobileAudioUrl(episode) : webAudioUrl(episode)
+}
+
+/** Async audio src: a downloaded episode's local file when one exists,
+ *  otherwise the same URL audioUrl() returns. The Player uses this so
+ *  offline downloads play from disk on native. */
+export async function resolveAudioSrc(episode) {
+  if (Capacitor.isNativePlatform()) return resolveAudioSrcNative(episode)
+  return webAudioUrl(episode)
+}
+
+/** OPML export on native: writes podcast-subscriptions.opml into the
+ *  Documents folder and returns its URI. On web the UI keeps linking
+ *  to /api/opml, so this is native-only. */
+export async function exportOpmlToFile() {
+  return mobileApi.saveOpmlToFile()
 }

@@ -1,7 +1,7 @@
 /* Subscriptions tab: the list of shows, and the episode list for one show. */
 
 import { useEffect, useState } from 'react'
-import { api } from '../api'
+import { api, exportOpmlToFile, isNative } from '../api'
 import EpisodeRow from './EpisodeRow'
 
 export default function Shows({ shows, onPlay, queueIds, onToggleQueue, downloadedIds, onDownloadChanged, onRefresh }) {
@@ -9,6 +9,21 @@ export default function Shows({ shows, onPlay, queueIds, onToggleQueue, download
   const [episodes, setEpisodes] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [opmlMsg, setOpmlMsg] = useState('')
+
+  // On native there is no backend /api/opml: build the file on-device
+  // instead and tell the user where it landed.
+  async function exportOpml(e) {
+    if (!isNative()) return // web: let the plain /api/opml link work
+    e.preventDefault()
+    setOpmlMsg('')
+    try {
+      const uri = await exportOpmlToFile()
+      setOpmlMsg(`Subscriptions saved to ${uri}`)
+    } catch (err) {
+      setOpmlMsg(`Export failed: ${err.message}`)
+    }
+  }
 
   useEffect(() => {
     if (!selected) return
@@ -92,9 +107,10 @@ export default function Shows({ shows, onPlay, queueIds, onToggleQueue, download
         </div>
       ))}
       <p className="muted">
-        <a href="/api/opml" download>Export subscriptions as OPML</a> to move them to
+        <a href="/api/opml" download onClick={exportOpml}>Export subscriptions as OPML</a> to move them to
         another app.
       </p>
+      {opmlMsg && <p className="muted">{opmlMsg}</p>}
     </div>
   )
 }
