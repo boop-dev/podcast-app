@@ -94,6 +94,14 @@ podcast-app\frontend\android\app\build\outputs\apk\debug\app-debug.apk
   Android Studio. Install the new APK over the old one — your data
   stays.
 - **Troubleshooting:**
+  - *"The project is using an incompatible version (AGP 8.13.0)... Latest
+    supported version is AGP 8.5.1":* your Android Studio is older than
+    the project needs. AGP 8.13.0 requires Android Studio Narwhal 3
+    Feature Drop (2025.1.3) or later. Update Android Studio via
+    **Help > Check for Updates**, or download the latest from
+    developer.android.com/studio, then reopen the project and build
+    again. Do not downgrade the AGP version in the project: it targets
+    API 36, which needs AGP 8.13.0.
   - *Gradle sync fails / SDK not found:* in Android Studio go to
     **File > Settings > Languages & Frameworks > Android SDK** and
     confirm an SDK platform is installed (API 34 or newer), then
