@@ -5,6 +5,7 @@
 import { useState } from 'react'
 import { useBackHandler } from '../lib/back'
 import Icon from './Icon'
+import Picker from './Picker'
 import { ChapterList, ShowNotes, currentChapter } from './PlayerPanels'
 import { formatDuration } from './EpisodeRow'
 
@@ -111,7 +112,7 @@ export default function PlayerView({
           </div>
 
           <div className="sheet-art">
-            <Artwork src={artwork} size="100%" large />
+            <Artwork src={(chapter && chapter.image) || artwork} fallback={artwork} size="100%" large />
           </div>
 
           <div className="sheet-info">
@@ -172,19 +173,19 @@ export default function PlayerView({
             <button className="chip" onClick={onCycleSpeed} title="Playback speed">
               {speed}×
             </button>
-            <label className="chip select-chip">
+            <Picker
+              title="Sleep timer"
+              triggerClass="chip"
+              value={sleepValue}
+              onChange={onSleepChange}
+              options={SLEEP_OPTIONS.map((opt) => ({ value: opt.value, label: opt.value === '0' ? 'Off' : opt.label }))}
+            >
               <Icon name="moon" size={16} />
-              <select value={sleepValue} onChange={(e) => onSleepChange(e.target.value)} title="Sleep timer">
-                {SLEEP_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.value === '0' ? 'Sleep timer' : opt.label}
-                  </option>
-                ))}
-              </select>
+              <span>{sleepValue === '0' ? 'Sleep timer' : SLEEP_OPTIONS.find((o) => o.value === sleepValue)?.label}</span>
               {sleepLeft !== null && sleepValue !== '0' && sleepValue !== 'episode' && (
                 <span>{formatLeft(sleepLeft)}</span>
               )}
-            </label>
+            </Picker>
           </div>
 
           <div className="panel-tabs">
@@ -211,10 +212,12 @@ export default function PlayerView({
   )
 }
 
-function Artwork({ src, size, large = false }) {
+function Artwork({ src, fallback = null, size, large = false }) {
+  const [failed, setFailed] = useState(null) // a chapter image that did not load: fall back to the show art
+  const shown = failed === src ? fallback : src
   const style = large ? {} : { width: size, height: size }
-  return src ? (
-    <img className={`art${large ? ' art-large' : ''}`} src={src} alt="" style={style} />
+  return shown ? (
+    <img className={`art${large ? ' art-large' : ''}`} src={shown} alt="" style={style} onError={() => setFailed(src)} />
   ) : (
     <div className={`art art-empty${large ? ' art-large' : ''}`} style={style} />
   )

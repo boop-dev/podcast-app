@@ -32,6 +32,10 @@ Effort: **S** under an hour, **M** a session, **L** a multi-step project.
 - [x] Bottom tab bar, artwork grid, mini + full-screen player, light/dark theme
 - [x] Android back button (close sheet, leave show, minimize)
 - [x] Android-only codebase (web, PWA, Flask, deploy files removed)
+- [x] Bundled modern typefaces (Inter for text, Plus Jakarta Sans for headings)
+- [x] Compact show page: filter strip, sort, collapsible options panel
+- [x] Styled picker sheets in place of native dropdowns; self-clearing notices
+- [x] "On air" colour scheme: warm paper / warm charcoal with a tangerine accent, matching icon and splash
 
 ## Queue
 
@@ -68,12 +72,12 @@ and decide on detection only after a feasibility spike.
 - [ ] Sleep timer: shake to extend, fade-out before pausing — S
 - [ ] Finer speed control (0.05x steps) — S
 - [x] Buffering and error states in the player (spinner, message, retry) — S
-- [ ] Chapter artwork in the player — S
+- [x] Chapter artwork in the player — S
 - [ ] Current chapter in the lock-screen / notification card — M
 
 ## Library and discovery
 
-- [ ] Per-show settings screen (speed, skip intro, auto-download, alerts) — M
+- [x] Per-show settings screen (speed, skip intro, auto-download, alerts) — M
 - [x] Search across all episodes — M
 - [x] Sort / filter by duration, downloaded, unplayed — S
 - [x] Search tab: mark already-subscribed shows, show genre / episode count / latest release — S

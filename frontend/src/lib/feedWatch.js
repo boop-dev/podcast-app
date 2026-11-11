@@ -4,7 +4,7 @@
  * refresh when it opens (see syncAll). */
 
 import * as store from '../mobile/store.js'
-import { NativeAudio } from './nativeAudio'
+import { NativeAudio } from './nativeAudio.js'
 
 const KNOWN_PER_FEED = 60
 
@@ -12,6 +12,7 @@ export async function buildFeedList() {
   const shows = await store.listShows()
   const feeds = []
   for (const show of shows) {
+    if (show.mute_alerts) continue // the user turned alerts off for this show
     const episodes = await store.listEpisodesForShow(show.id) // newest first
     feeds.push({
       id: show.id,

@@ -29,6 +29,7 @@ import { adRanges, isAdChapter } from '../src/lib/adChapters.js'
 import { DownloadQueue } from '../src/lib/downloadQueue.js'
 import { applyListView, rankEpisodes, scoreEpisode, shareText } from '../src/lib/episodeList.js'
 import { localName } from '../src/mobile/downloads.js'
+import { buildFeedList } from '../src/lib/feedWatch.js'
 import { pickEvictions } from '../src/lib/storageCap.js'
 import * as store from '../src/mobile/store.js'
 import { mobileApi } from '../src/mobile/api.js'
@@ -385,12 +386,13 @@ try {
     { id: 'd', title: 'Delta', duration_seconds: null, completed: false, position_seconds: 0 },
   ]
   const ids = (v) => v.map((e) => e.id).join('')
-  check('filter: unplayed', ids(applyListView(L, { filter: 'unplayed' })) === 'acd')
+  check('filter: unplayed excludes episodes in progress', ids(applyListView(L, { filter: 'unplayed' })) === 'ad')
+  check('filter: a few seconds in (under 10s) still counts as unplayed', ids(applyListView([{ id: 'x', completed: false, position_seconds: 8 }], { filter: 'unplayed' })) === 'x')
   check('filter: in progress', ids(applyListView(L, { filter: 'progress' })) === 'c')
   check('filter: downloaded', ids(applyListView(L, { filter: 'downloaded', downloadedIds: new Set(['b', 'd']) })) === 'bd')
   check('sort: oldest, longest, shortest (unknown durations last / first as expected)',
     ids(applyListView(L, { sort: 'old' })) === 'dcba' && ids(applyListView(L, { sort: 'long' })) === 'bcad' && ids(applyListView(L, { sort: 'short' })) === 'acbd')
-  check('filter + search combine', ids(applyListView(L, { filter: 'unplayed', query: 'ga' })) === 'c')
+  check('filter + search combine', ids(applyListView(L, { filter: 'unplayed', query: 'ta' })) === 'd' && ids(applyListView(L, { filter: 'progress', query: 'ga' })) === 'c')
   check('share: prefers the episode page, falls back to the audio link',
     shareText({ title: 'T', link: 'https://x.test/ep', audio_url: 'https://x.test/a.mp3' }, 'Show').url === 'https://x.test/ep' &&
     shareText({ title: 'T', audio_url: 'https://x.test/a.mp3' }, 'Show').url === 'https://x.test/a.mp3' &&
@@ -402,6 +404,21 @@ try {
   const feed = parseFeedXml(xml, 'https://x.test/feed2')
   const by = Object.fromEntries(feed.episodes.map((e) => [e.title, e]))
   check('feed: episode page link is read, audio-file links are not treated as a page', by.Page.link === 'https://x.test/episodes/1' && by.AudioLink.link === null)
+}
+
+// --- 15. Per-show alerts ---
+{
+  const sid = (await store.listShows())[0].id
+  check('alerts: on by default, included in the background feed list', (await buildFeedList()).some((f) => f.id === sid))
+  await mobileApi.setShowAlerts(sid, false)
+  check('alerts: a muted show is left out of the feed list', !(await buildFeedList()).some((f) => f.id === sid))
+  const bk = await mobileApi.buildBackup()
+  check('alerts: mute survives backup', bk.shows[0].mute_alerts === true)
+  await store.clearAll()
+  await mobileApi.restoreBackup(JSON.stringify(bk))
+  check('alerts: mute survives restore', (await store.listShows())[0].mute_alerts === true)
+  await mobileApi.setShowAlerts((await store.listShows())[0].id, true)
+  check('alerts: can be turned back on', (await buildFeedList()).length === 1)
 }
 
 // --- cleanup: delete-show cascade ---

@@ -6,7 +6,8 @@ import EpisodeRow from './EpisodeRow'
 import Icon from './Icon'
 import { useBackHandler } from '../lib/back'
 import { enqueueMany } from '../lib/downloadManager'
-import { FILTERS, SORTS, applyListView } from '../lib/episodeList'
+import { FILTERS, SORTS, applyListView, isInProgress, isUnplayed } from '../lib/episodeList'
+import Picker from './Picker'
 
 export default function Shows({ shows, onPlay, queueIds, onToggleQueue, onPlayNext, downloadedIds, onDownloadChanged, onRefresh }) {
   const [selected, setSelected] = useState(null) // a show row
@@ -18,12 +19,35 @@ export default function Shows({ shows, onPlay, queueIds, onToggleQueue, onPlayNe
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState('new')
   const [skips, setSkips] = useState({ intro: 0, outro: 0 })
-  const [dlMenu, setDlMenu] = useState(false)
-  const [dlMsg, setDlMsg] = useState('')
+  const [optionsOpen, setOptionsOpen] = useState(false)
+  const [speed, setSpeed] = useState(1)
+  const [notice, setNotice] = useState('') // short, neutral feedback that clears by itself
 
   useEffect(() => {
-    if (selected) api.getShowSkips(selected.id).then(setSkips).catch(() => {})
+    if (!notice) return undefined
+    const id = setTimeout(() => setNotice(''), 4000)
+    return () => clearTimeout(id)
+  }, [notice])
+
+  useEffect(() => {
+    if (selected) {
+      api.getShowSkips(selected.id).then(setSkips).catch(() => {})
+      api.getPlaybackSpeed(selected.id).then(setSpeed).catch(() => {})
+    }
   }, [selected])
+
+  function changeSpeed(value) {
+    const v = Number(value)
+    setSpeed(v)
+    api.setPlaybackSpeed(selected.id, v).catch(() => {})
+  }
+
+  async function toggleAlerts() {
+    const enabled = Boolean(selected.mute_alerts) // currently muted -> turn on
+    await api.setShowAlerts(selected.id, enabled)
+    setSelected({ ...selected, mute_alerts: !enabled })
+    onRefresh()
+  }
 
   function changeSkip(which, value) {
     const next = { ...skips, [which]: Number(value) }
@@ -87,13 +111,12 @@ export default function Shows({ shows, onPlay, queueIds, onToggleQueue, onPlayNe
 
   // Download the newest unplayed, not-yet-downloaded episodes of this show.
   async function downloadUnplayed(limit) {
-    setDlMenu(false)
     const todo = episodes.filter((ep) => !ep.completed && !downloadedIds.has(ep.id))
     const picked = limit ? todo.slice(0, limit) : todo
-    if (picked.length === 0) return setDlMsg('Nothing to download: every unplayed episode is already saved.')
+    if (picked.length === 0) return setNotice('Nothing to download: every unplayed episode is already saved.')
     if (picked.length > 10 && !window.confirm(`Download ${picked.length} episodes? This can use a lot of storage.`)) return
     const added = await enqueueMany(picked)
-    setDlMsg(`Queued ${added} episode${added === 1 ? '' : 's'}. Progress shows on each episode and in Settings.`)
+    setNotice(`Queued ${added} episode${added === 1 ? '' : 's'}. Progress shows on each episode and in Settings.`)
   }
 
   async function markAllPlayed() {
@@ -103,7 +126,8 @@ export default function Shows({ shows, onPlay, queueIds, onToggleQueue, onPlayNe
       const res = await api.markShowPlayed(selected.id)
       setEpisodes(await api.listEpisodes(selected.id))
       onRefresh()
-      setError(res.changed ? `Marked ${res.changed} episodes as played.` : 'Everything was already played.')
+      setError('')
+      setNotice(res.changed ? `Marked ${res.changed} episodes as played.` : 'Everything was already played.')
     } catch (err) {
       setError(err.message)
     } finally {
@@ -137,12 +161,14 @@ export default function Shows({ shows, onPlay, queueIds, onToggleQueue, onPlayNe
   async function refresh() {
     if (!selected) return
     setLoading(true)
+    setError('')
+    setNotice('')
     try {
       const res = await api.refreshShow(selected.id)
       const eps = await api.listEpisodes(selected.id)
       setEpisodes(eps)
       onRefresh()
-      if (res.new_episodes === 0) setError('No new episodes.')
+      setNotice(res.new_episodes === 0 ? 'No new episodes.' : `${res.new_episodes} new episode${res.new_episodes === 1 ? '' : 's'}.`)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -154,46 +180,140 @@ export default function Shows({ shows, onPlay, queueIds, onToggleQueue, onPlayNe
   const visibleEpisodes = applyListView(episodes, { filter, sort, query, downloadedIds })
   const counts = {
     all: episodes.length,
-    unplayed: episodes.filter((e) => !e.completed).length,
-    progress: episodes.filter((e) => e.position_seconds > 10 && !e.completed).length,
+    unplayed: episodes.filter(isUnplayed).length,
+    progress: episodes.filter(isInProgress).length,
     downloaded: episodes.filter((e) => downloadedIds.has(e.id)).length,
   }
 
   if (selected) {
+    const unplayedCount = counts.unplayed
+    const speedOptions = [0.75, 1, 1.25, 1.5, 1.75, 2, 2.5]
+    const secondsOptions = [0, 10, 15, 30, 45, 60, 90, 120]
+    const downloadable = episodes.filter((ep) => !ep.completed && !downloadedIds.has(ep.id)).length
     return (
-      <div>
-        <button className="back-link" onClick={leaveShow}>
-          <Icon name="chevronLeft" size={18} /> All shows
-        </button>
-        <div className="show-detail">
-          {selected.image_url && <img src={selected.image_url} alt="" />}
-          <div>
-            <h2>{selected.title}</h2>
-            <p className="muted">{selected.author}</p>
-            <p className="muted">{episodes.length} episodes</p>
-          </div>
-        </div>
-        <input
-          type="search"
-          className="episode-search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search episodes…"
-          aria-label="Search episodes"
-        />
-        <div className="toolbar">
-          <button className="pill" onClick={refresh} disabled={loading}>
-            Refresh
+      <div className="show-page">
+        <div className="show-topbar">
+          <button className="back-link" onClick={leaveShow}>
+            <Icon name="chevronLeft" size={18} /> All shows
           </button>
-          <label className="pill select-pill">
-            <select value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort episodes">
-              {SORTS.map((s) => (
-                <option key={s.id} value={s.id}>{s.label}</option>
-              ))}
-            </select>
-          </label>
+          <span className="spacer" />
+          <button
+            className="icon-btn"
+            onClick={refresh}
+            disabled={loading}
+            title="Check for new episodes"
+            aria-label="Check for new episodes"
+          >
+            <Icon name="retry" />
+          </button>
+          <button
+            className={`icon-btn${optionsOpen ? ' on' : ''}`}
+            onClick={() => setOptionsOpen(!optionsOpen)}
+            aria-expanded={optionsOpen}
+            title="Show options"
+            aria-label="Show options"
+          >
+            <Icon name="settings" />
+          </button>
         </div>
-        <div className="toolbar filter-row" role="group" aria-label="Filter episodes">
+
+        <header className="show-hero">
+          {selected.image_url ? <img src={selected.image_url} alt="" /> : <span className="art-empty hero-art" />}
+          <div className="hero-text">
+            <h2>{selected.title}</h2>
+            {selected.author && <p className="muted">{selected.author}</p>}
+            <p className="muted">
+              {episodes.length} episodes · {unplayedCount} unplayed
+            </p>
+          </div>
+        </header>
+
+        {notice && <p className="notice" role="status">{notice}</p>}
+
+        {optionsOpen && (
+          <section className="show-options card" aria-label="Show options">
+            <div className="opt-row">
+              <span>Playback speed</span>
+              <Picker
+                title="Playback speed"
+                value={speed}
+                onChange={changeSpeed}
+                options={speedOptions.map((v) => ({ value: v, label: `${v}×` }))}
+              />
+            </div>
+            <div className="opt-row">
+              <span>Skip intro</span>
+              <Picker
+                title="Skip intro"
+                value={skips.intro}
+                onChange={(v) => changeSkip('intro', v)}
+                options={secondsOptions.map((v) => ({ value: v, label: v === 0 ? 'Off' : `${v} seconds` }))}
+              />
+            </div>
+            <div className="opt-row">
+              <span>Skip outro</span>
+              <Picker
+                title="Skip outro"
+                value={skips.outro}
+                onChange={(v) => changeSkip('outro', v)}
+                options={secondsOptions.map((v) => ({ value: v, label: v === 0 ? 'Off' : `${v} seconds` }))}
+              />
+            </div>
+            <label className="opt-row">
+              <span>
+                Auto-download new episodes
+                <small>Wi-Fi only. Deleted after you finish them.</small>
+              </span>
+              <input type="checkbox" checked={Boolean(selected.auto_download)} onChange={toggleAutoDownload} />
+            </label>
+            <label className="opt-row">
+              <span>
+                New-episode alerts
+                <small>Notify me when this show publishes.</small>
+              </span>
+              <input type="checkbox" checked={!selected.mute_alerts} onChange={toggleAlerts} />
+            </label>
+            <div className="opt-block">
+              <span className="opt-label">Download unplayed</span>
+              <div className="chip-row">
+                <button className="pill" onClick={() => downloadUnplayed(3)}>Newest 3</button>
+                <button className="pill" onClick={() => downloadUnplayed(5)}>Newest 5</button>
+                <button className="pill" onClick={() => downloadUnplayed(10)}>Newest 10</button>
+                <button className="pill" onClick={() => downloadUnplayed(0)}>All ({downloadable})</button>
+              </div>
+            </div>
+            <div className="opt-block opt-danger">
+              <button className="pill" onClick={markAllPlayed} disabled={loading}>
+                Mark all played
+              </button>
+              <button className="pill danger" onClick={unsubscribe}>
+                Unsubscribe
+              </button>
+            </div>
+          </section>
+        )}
+
+        <div className="find-row">
+          <input
+            type="search"
+            className="episode-search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search episodes…"
+            aria-label="Search episodes"
+          />
+          <Picker
+            title="Sort episodes"
+            ariaLabel="Sort episodes"
+            triggerClass="icon-btn sort-btn"
+            value={sort}
+            onChange={setSort}
+            options={SORTS.map((o) => ({ value: o.id, label: o.label }))}
+          >
+            <Icon name="sort" />
+          </Picker>
+        </div>
+        <div className="filter-strip" role="group" aria-label="Filter episodes">
           {FILTERS.map((f) => (
             <button key={f.id} className={`pill${filter === f.id ? ' on' : ''}`} onClick={() => setFilter(f.id)}>
               {f.label}
@@ -201,59 +321,7 @@ export default function Shows({ shows, onPlay, queueIds, onToggleQueue, onPlayNe
             </button>
           ))}
         </div>
-        <div className="toolbar" style={{ marginTop: 8 }}>
-          <button className={`pill${dlMenu ? ' on' : ''}`} onClick={() => setDlMenu(!dlMenu)} aria-expanded={dlMenu}>
-            <Icon name="download" size={16} /> Download unplayed
-          </button>
-        </div>
-        {dlMenu && (
-          <div className="toolbar queue-menu" style={{ marginTop: 0 }}>
-            <button onClick={() => downloadUnplayed(3)}>Newest 3</button>
-            <button onClick={() => downloadUnplayed(5)}>Newest 5</button>
-            <button onClick={() => downloadUnplayed(10)}>Newest 10</button>
-            <button onClick={() => downloadUnplayed(0)}>
-              All unplayed ({episodes.filter((ep) => !ep.completed && !downloadedIds.has(ep.id)).length})
-            </button>
-          </div>
-        )}
-        {dlMsg && <p className="muted" style={{ margin: '6px 0' }}>{dlMsg}</p>}
-        <label className="setting-row">
-          <span>
-            Auto-download new episodes
-            <small>On Wi-Fi only. Deleted after you finish them.</small>
-          </span>
-          <input type="checkbox" checked={Boolean(selected.auto_download)} onChange={toggleAutoDownload} />
-        </label>
-        <div className="setting-row">
-          <span>
-            Skip intro
-            <small>Start each new episode this far in.</small>
-          </span>
-          <select value={skips.intro} onChange={(e) => changeSkip('intro', e.target.value)}>
-            {[0, 10, 15, 30, 45, 60, 90, 120].map((v) => (
-              <option key={v} value={v}>{v === 0 ? 'Off' : `${v} s`}</option>
-            ))}
-          </select>
-        </div>
-        <div className="setting-row">
-          <span>
-            Skip outro
-            <small>Move on this long before the end.</small>
-          </span>
-          <select value={skips.outro} onChange={(e) => changeSkip('outro', e.target.value)}>
-            {[0, 10, 15, 30, 45, 60, 90, 120].map((v) => (
-              <option key={v} value={v}>{v === 0 ? 'Off' : `${v} s`}</option>
-            ))}
-          </select>
-        </div>
-        <div className="toolbar" style={{ marginTop: 8 }}>
-          <button className="pill" onClick={markAllPlayed} disabled={loading}>
-            Mark all played
-          </button>
-          <button className="pill danger" onClick={unsubscribe}>
-            Unsubscribe
-          </button>
-        </div>
+
         {error && <div className="error" style={{ marginTop: 12 }}>{error}</div>}
         {loading && <p className="muted">Loading episodes…</p>}
         {!loading && visibleEpisodes.length === 0 && (needle || filter !== 'all') && (

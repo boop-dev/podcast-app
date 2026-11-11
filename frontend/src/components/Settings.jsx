@@ -9,6 +9,7 @@ import {
   clearQueued, enforceCap, getCapGb, removeJob, retryJob, setCapGb, useDownloads,
 } from '../lib/downloadManager'
 import { CAP_OPTIONS_GB } from '../lib/storageCap'
+import Picker from './Picker'
 
 function formatBytes(n) {
   if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`
@@ -173,24 +174,21 @@ export default function Settings({ onChanged }) {
       </label>
       <div className="setting-row">
         <span>Skip back</span>
-        <select value={options.skipBackSec} onChange={(e) => changeNumber('skipBackSec', e.target.value)}>
-          {[5, 10, 15, 30].map((s) => <option key={s} value={s}>{s} s</option>)}
-        </select>
+        <Picker title="Skip back" value={options.skipBackSec} onChange={(v) => changeNumber('skipBackSec', v)}
+          options={[5, 10, 15, 30].map((s) => ({ value: s, label: `${s} seconds` }))} />
       </div>
       <div className="setting-row">
         <span>Skip forward</span>
-        <select value={options.skipForwardSec} onChange={(e) => changeNumber('skipForwardSec', e.target.value)}>
-          {[15, 30, 45, 60].map((s) => <option key={s} value={s}>{s} s</option>)}
-        </select>
+        <Picker title="Skip forward" value={options.skipForwardSec} onChange={(v) => changeNumber('skipForwardSec', v)}
+          options={[15, 30, 45, 60].map((s) => ({ value: s, label: `${s} seconds` }))} />
       </div>
       <div className="setting-row">
         <span>
           Skip ahead button
           <small>The long jump in the player, for getting past an ad.</small>
         </span>
-        <select value={options.skipAheadSec} onChange={(e) => changeNumber('skipAheadSec', e.target.value)}>
-          {[30, 60, 90, 120, 180].map((s) => <option key={s} value={s}>{s} s</option>)}
-        </select>
+        <Picker title="Skip ahead button" value={options.skipAheadSec} onChange={(v) => changeNumber('skipAheadSec', v)}
+          options={[30, 60, 90, 120, 180].map((s) => ({ value: s, label: `${s} seconds` }))} />
       </div>
 
       <h2 className="section">New episodes</h2>
@@ -204,12 +202,8 @@ export default function Settings({ onChanged }) {
       {watch.enabled && (
         <div className="setting-row">
           <span>Check every</span>
-          <select value={watch.intervalHours} onChange={(e) => changeInterval(Number(e.target.value))}>
-            <option value={1}>hour</option>
-            <option value={3}>3 hours</option>
-            <option value={6}>6 hours</option>
-            <option value={12}>12 hours</option>
-          </select>
+          <Picker title="Check every" value={watch.intervalHours} onChange={(v) => changeInterval(Number(v))}
+            options={[{ value: 1, label: 'Hour' }, { value: 3, label: '3 hours' }, { value: 6, label: '6 hours' }, { value: 12, label: '12 hours' }]} />
         </div>
       )}
       {watch.enabled && (
@@ -252,11 +246,8 @@ export default function Settings({ onChanged }) {
           Storage limit
           <small>Deletes the oldest finished downloads first. Never what is playing or queued.</small>
         </span>
-        <select value={capGb} onChange={(e) => changeCap(Number(e.target.value))}>
-          {CAP_OPTIONS_GB.map((g) => (
-            <option key={g} value={g}>{g === 0 ? 'No limit' : `${g} GB`}</option>
-          ))}
-        </select>
+        <Picker title="Storage limit" value={capGb} onChange={(v) => changeCap(Number(v))}
+          options={CAP_OPTIONS_GB.map((g) => ({ value: g, label: g === 0 ? 'No limit' : `${g} GB` }))} />
       </div>
       {usage === null ? (
         <p className="muted">Measuring…</p>

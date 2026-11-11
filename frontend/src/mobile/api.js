@@ -235,6 +235,14 @@ export const mobileApi = {
     return { intro: Number(intro) || 0, outro: Number(outro) || 0 }
   },
 
+  /** Whether background new-episode alerts are on for this show (default on). */
+  async setShowAlerts(showId, enabled) {
+    const show = await store.getShow(showId)
+    if (!show) throw new Error('show not found')
+    await store.putShow({ ...show, mute_alerts: !enabled })
+    return { alerts: Boolean(enabled) }
+  },
+
   async setPlaybackSpeed(showId, speed) {
     const show = await store.getShow(showId)
     if (!show) return { playback_speed: speed }
@@ -465,6 +473,7 @@ export const mobileApi = {
         playback_speed: s.playback_speed || null,
         skip_intro: s.skip_intro || 0,
         skip_outro: s.skip_outro || 0,
+        mute_alerts: Boolean(s.mute_alerts),
       })),
       positions,
       queue: await store.getQueueOrder(),
@@ -494,6 +503,7 @@ export const mobileApi = {
         const show = await this.subscribe(s.feed_url)
         if (s.auto_download) await this.setAutoDownload(show.id, true)
         if (s.playback_speed) await this.setPlaybackSpeed(show.id, s.playback_speed)
+        if (s.mute_alerts) await this.setShowAlerts(show.id, false)
         if (s.skip_intro || s.skip_outro) {
           await this.setShowSkips(show.id, { intro: s.skip_intro, outro: s.skip_outro })
         }

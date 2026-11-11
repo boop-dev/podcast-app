@@ -34,6 +34,12 @@ export function rankEpisodes(episodes, query, limit = 50) {
   return scored.slice(0, limit).map((x) => x.ep)
 }
 
+/** Started but not finished. */
+export const isInProgress = (ep) => !ep.completed && ep.position_seconds > 10
+
+/** Not finished and not started: nothing played yet. */
+export const isUnplayed = (ep) => !ep.completed && !(ep.position_seconds > 10)
+
 export const SORTS = [
   { id: 'new', label: 'Newest first' },
   { id: 'old', label: 'Oldest first' },
@@ -52,8 +58,8 @@ export const FILTERS = [
 export function applyListView(episodes, { filter = 'all', sort = 'new', query = '', downloadedIds = new Set() } = {}) {
   const needle = query.trim().toLowerCase()
   let out = episodes.filter((ep) => {
-    if (filter === 'unplayed' && ep.completed) return false
-    if (filter === 'progress' && !(ep.position_seconds > 10 && !ep.completed)) return false
+    if (filter === 'unplayed' && !isUnplayed(ep)) return false
+    if (filter === 'progress' && !isInProgress(ep)) return false
     if (filter === 'downloaded' && !downloadedIds.has(ep.id)) return false
     if (needle && !((ep.title || '').toLowerCase().includes(needle) || plain(ep.description).includes(needle))) return false
     return true

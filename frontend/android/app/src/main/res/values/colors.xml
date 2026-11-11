@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Window background before the web page paints: matches the app background colour. -->
+    <color name="app_bg">#FAF6F0</color>
+</resources>

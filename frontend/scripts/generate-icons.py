@@ -16,7 +16,7 @@ import os
 from PIL import Image, ImageDraw
 
 RES = os.path.join(os.path.dirname(__file__), '..', 'android', 'app', 'src', 'main', 'res')
-TOP, BOTTOM = (112, 98, 247), (74, 62, 222)  # indigo gradient (matches the app accent)
+TOP, BOTTOM = (255, 138, 76), (224, 80, 26)  # tangerine gradient (matches the app accent)
 WHITE = (255, 255, 255, 255)
 SS = 4  # supersampling factor for smooth edges
 

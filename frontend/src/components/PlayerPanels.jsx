@@ -1,17 +1,26 @@
 /* Panels under the full-screen player: the chapter list and the show notes. */
 
+import { useState } from 'react'
 import { formatDuration } from './EpisodeRow'
 import { currentChapter, splitTimestamps } from '../lib/notes'
 
 export { currentChapter }
 
+function ChapterThumb({ src }) {
+  const [failed, setFailed] = useState(false)
+  if (!src || failed) return <span className="chapter-thumb placeholder" aria-hidden="true" />
+  return <img className="chapter-thumb" src={src} alt="" loading="lazy" onError={() => setFailed(true)} />
+}
+
 export function ChapterList({ chapters, current, onSeek }) {
   const active = currentChapter(chapters, current)
+  const hasImages = chapters.some((c) => c.image) // reserve the thumbnail column so titles line up
   return (
     <ul className="chapter-list">
       {chapters.map((c) => (
         <li key={c.start}>
           <button className={c === active ? 'active' : ''} onClick={() => onSeek(c.start)}>
+            {hasImages && <ChapterThumb src={c.image} />}
             <span className="chapter-time">{formatDuration(c.start)}</span>
             <span className="chapter-title">{c.title || 'Untitled'}</span>
           </button>
