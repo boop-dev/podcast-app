@@ -5,6 +5,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from './api'
 import { App as CapApp } from '@capacitor/app'
 import { syncAll } from './mobile/sync'
+import * as store from './mobile/store'
+import { episodeIdFor } from './mobile/store'
 import { handleBack } from './lib/back'
 import { NativeAudio } from './lib/nativeAudio'
 import { refreshFeedWatchList } from './lib/feedWatch'
@@ -24,6 +26,19 @@ const TITLES = {
   search: 'Search',
   queue: 'Up Next',
   settings: 'Settings',
+}
+
+async function recordBackgroundDownloads() {
+  const res = await NativeAudio.consumeDownloads().catch(() => null)
+  for (const d of (res && res.downloads) || []) {
+    await store.putDownload(episodeIdFor(d.showId, d.guid), {
+      episodeId: episodeIdFor(d.showId, d.guid),
+      path: d.fileName,
+      fileName: d.fileName,
+      bytes: d.bytes,
+      downloadedAt: new Date().toISOString(),
+    })
+  }
 }
 
 export default function App() {
@@ -94,6 +109,7 @@ export default function App() {
         // if so, refresh right now instead of waiting for the normal interval.
         const alerts = await NativeAudio.consumeFeedAlerts().catch(() => ({ count: 0 }))
         const res = await syncAll({ force: alerts.count > 0 })
+        await applyNotificationActions()
         if (res) {
           refreshShows()
           refreshDownloads()
@@ -113,7 +129,8 @@ export default function App() {
   // On start, remove half-written files and apply the storage cap.
   useEffect(() => {
     const off = onCompleted(() => refreshDownloads())
-    cleanupOrphans().then(() => enforceCap()).then(() => refreshDownloads()).catch(() => {})
+    // Record files the background worker downloaded first, or cleanup would delete them as orphans.
+    recordBackgroundDownloads().then(() => cleanupOrphans()).then(() => enforceCap()).then(() => refreshDownloads()).catch(() => {})
     return off
   }, [refreshDownloads])
 
@@ -122,6 +139,21 @@ export default function App() {
     const id = setTimeout(refreshFeedWatchList, 1500)
     return () => clearTimeout(id)
   }, [shows])
+
+  // Buttons pressed on a new-episode notification: queue the episodes / play the newest.
+  async function applyNotificationActions() {
+    const act = await NativeAudio.consumePendingActions().catch(() => null)
+    if (!act) return
+    for (const { showId, guid } of act.queue || []) {
+      const ep = await api.getEpisode(episodeIdFor(showId, guid)).catch(() => null)
+      if (ep) await api.addToQueue(ep.id).catch(() => {})
+    }
+    if ((act.queue || []).length) refreshQueue()
+    if (act.play) {
+      const ep = await api.getEpisode(episodeIdFor(act.play.showId, act.play.guid)).catch(() => null)
+      if (ep) playEpisode(ep, ep.show_title || '')
+    }
+  }
 
   function playEpisode(episode, showTitle = '') {
     setNowPlaying({ episode, showTitle, autoplay: true, token: Date.now() + Math.random() })

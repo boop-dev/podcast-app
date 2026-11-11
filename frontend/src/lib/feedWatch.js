@@ -18,6 +18,7 @@ export async function buildFeedList() {
       id: show.id,
       title: show.title,
       url: show.feed_url,
+      autoDownload: Boolean(show.auto_download), // the worker fetches new episodes itself, on Wi-Fi
       known: episodes.slice(0, KNOWN_PER_FEED).map((e) => e.guid),
     })
   }

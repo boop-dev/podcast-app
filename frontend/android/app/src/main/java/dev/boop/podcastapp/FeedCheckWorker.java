@@ -19,7 +19,13 @@ import org.json.JSONObject;
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserFactory;
 
+import android.net.ConnectivityManager;
+
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
@@ -99,6 +105,9 @@ public class FeedCheckWorker extends Worker {
         feed.put("known", updated);
 
         notifyNew(ctx, feed.optString("id"), feed.optString("title", "New episode"), fresh);
+        if (feed.optBoolean("autoDownload")) {
+            autoDownload(ctx, ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE), feed.optString("id"), fresh);
+        }
         return fresh.size();
     }
 
@@ -119,6 +128,20 @@ public class FeedCheckWorker extends Worker {
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(text))
                 .setContentIntent(open)
                 .setAutoCancel(true);
+        // Play (newest) opens the app and starts it; Queue adds every new one without opening the app.
+        Intent play = new Intent(ctx, MainActivity.class)
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_NEW_TASK)
+                .putExtra("play_show", showId).putExtra("play_guid", fresh.get(0)[0]);
+        play.setAction("dev.boop.podcastapp.PLAY_NEW");
+        b.addAction(0, "Play", PendingIntent.getActivity(ctx, showId.hashCode() + 1, play,
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
+        String[] guids = new String[Math.min(fresh.size(), 10)];
+        for (int i = 0; i < guids.length; i++) guids[i] = fresh.get(i)[0];
+        Intent queue = new Intent(ctx, NotificationActionReceiver.class)
+                .setAction(NotificationActionReceiver.ACTION_QUEUE)
+                .putExtra("showId", showId).putExtra("guids", guids).putExtra("notifId", showId.hashCode());
+        b.addAction(0, "Add to queue", PendingIntent.getBroadcast(ctx, showId.hashCode() + 2, queue,
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
         try {
             NotificationManagerCompat.from(ctx).notify(showId.hashCode(), b.build());
         } catch (SecurityException ignored) {
@@ -132,13 +155,25 @@ public class FeedCheckWorker extends Worker {
      * episodes is fully counted without parsing the whole archive.
      */
     static List<String[]> fetchItems(String urlString, Set<String> known) throws Exception {
+        HttpURLConnection conn = openFollowingRedirects(urlString, 20000);
+        List<String[]> items = new ArrayList<>();
+        try (InputStream in = conn.getInputStream()) {
+            parseItems(in, known, items);
+        } finally {
+            conn.disconnect();
+        }
+        return items;
+    }
+
+    /** GET a URL, following http<->https redirects ourselves (HttpURLConnection will not). */
+    static HttpURLConnection openFollowingRedirects(String urlString, int readTimeoutMs) throws Exception {
         HttpURLConnection conn = null;
         String current = urlString;
         for (int hop = 0; hop < 6; hop++) { // follow http<->https redirects ourselves
             conn = (HttpURLConnection) new URL(current).openConnection();
             conn.setInstanceFollowRedirects(false);
             conn.setConnectTimeout(15000);
-            conn.setReadTimeout(20000);
+            conn.setReadTimeout(readTimeoutMs);
             conn.setRequestProperty("User-Agent", "PodcastApp/1.0 (Android)");
             int code = conn.getResponseCode();
             if (code >= 300 && code < 400 && conn.getHeaderField("Location") != null) {
@@ -149,8 +184,11 @@ public class FeedCheckWorker extends Worker {
             if (code < 200 || code >= 300) throw new IllegalStateException("HTTP " + code);
             break;
         }
-        List<String[]> items = new ArrayList<>();
-        try (InputStream in = conn.getInputStream()) {
+        return conn;
+    }
+
+    private static void parseItems(InputStream in, Set<String> known, List<String[]> items) throws Exception {
+        {
             XmlPullParser p = XmlPullParserFactory.newInstance().newPullParser();
             p.setInput(in, null);
             boolean inItem = false;
@@ -178,16 +216,65 @@ public class FeedCheckWorker extends Worker {
                     inItem = false;
                     String id = firstNonEmpty(guid, link, enclosure); // same fallback order as the JS parser
                     if (id != null) {
-                        items.add(new String[]{id, title == null || title.isEmpty() ? "New episode" : title});
+                        items.add(new String[]{id, title == null || title.isEmpty() ? "New episode" : title, enclosure});
                         knownRun = known.contains(id) ? knownRun + 1 : 0;
                     }
                 }
                 event = p.next();
             }
-        } finally {
-            conn.disconnect();
         }
-        return items;
+    }
+
+    // --- background download of new episodes ---------------------------------
+
+    static final String KEY_PENDING_DOWNLOADS = "pending_downloads"; // [{showId, guid, fileName, bytes}]
+    private static final int AUTO_DOWNLOADS_PER_FEED = 3;
+
+    /** Same FNV-1a hash as episodeIdFor() in src/mobile/store.js, so the app finds the file. */
+    static String fnv(String s) {
+        int h = 0x811c9dc5;
+        for (int i = 0; i < s.length(); i++) {
+            h ^= s.charAt(i);
+            h *= 0x01000193;
+        }
+        return String.format("%08x", h);
+    }
+
+    /** Download the newest new episodes of a feed that opted in, on an unmetered network only. */
+    private void autoDownload(Context ctx, SharedPreferences prefs, String showId, List<String[]> fresh) {
+        ConnectivityManager cm = (ConnectivityManager) ctx.getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (cm == null || cm.isActiveNetworkMetered()) return;
+        int done = 0;
+        for (String[] item : fresh) {
+            if (done >= AUTO_DOWNLOADS_PER_FEED || isStopped()) break;
+            String url = item.length > 2 ? item[2] : null;
+            if (url == null || url.isEmpty()) continue;
+            Matcher m = Pattern.compile("\\.(mp3|m4a|ogg|wav|aac|flac)$", Pattern.CASE_INSENSITIVE).matcher(url.split("\\?")[0]);
+            String name = "ep_" + fnv(showId + "|" + item[0]) + (m.find() ? m.group() : ".mp3");
+            File dest = new File(ctx.getFilesDir(), name);
+            File part = new File(ctx.getFilesDir(), name + ".part");
+            try {
+                HttpURLConnection conn = openFollowingRedirects(url, 30000);
+                try (InputStream in = conn.getInputStream(); FileOutputStream out = new FileOutputStream(part)) {
+                    byte[] buf = new byte[64 * 1024];
+                    int n;
+                    while ((n = in.read(buf)) > 0) {
+                        if (isStopped()) throw new IllegalStateException("stopped");
+                        out.write(buf, 0, n);
+                    }
+                } finally {
+                    conn.disconnect();
+                }
+                if (!part.renameTo(dest)) throw new IllegalStateException("rename failed");
+                JSONArray pending = new JSONArray(prefs.getString(KEY_PENDING_DOWNLOADS, "[]"));
+                pending.put(new JSONObject().put("showId", showId).put("guid", item[0])
+                        .put("fileName", name).put("bytes", dest.length()));
+                prefs.edit().putString(KEY_PENDING_DOWNLOADS, pending.toString()).apply();
+                done++;
+            } catch (Exception e) {
+                part.delete(); // keep no half-written file around
+            }
+        }
     }
 
     private static String firstNonEmpty(String... values) {

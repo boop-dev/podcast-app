@@ -90,11 +90,11 @@ and decide on detection only after a feasibility spike.
 - [x] Download all unplayed from a show — S
 - [x] Download progress display — M
 - [x] Storage cap (delete oldest past a limit) — S
-- [ ] Download new episodes in the background — M
+- [x] Download new episodes in the background — M
 
 ## Alerts and backup
 
-- [ ] Notification actions: Play / Add to queue — M
+- [x] Notification actions: Play / Add to queue — M
 - [x] Alert check covers more than the newest 12 items — S
 - [ ] Scheduled automatic backups to a cloud folder — M
 

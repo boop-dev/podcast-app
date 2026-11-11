@@ -267,6 +267,34 @@ public class NativeAudioPlugin extends Plugin {
         call.resolve(o);
     }
 
+    /** Notification button presses waiting for the app: {queue:[{showId,guid}], play:{showId,guid}|null}. */
+    @PluginMethod
+    public void consumePendingActions(PluginCall call) {
+        android.content.SharedPreferences p = getContext().getSharedPreferences(FeedCheckWorker.PREFS, android.content.Context.MODE_PRIVATE);
+        JSObject o = new JSObject();
+        try {
+            o.put("queue", new org.json.JSONArray(p.getString(NotificationActionReceiver.KEY_PENDING_QUEUE, "[]")));
+            String play = p.getString(NotificationActionReceiver.KEY_PENDING_PLAY, null);
+            o.put("play", play == null ? org.json.JSONObject.NULL : new org.json.JSONObject(play));
+        } catch (Exception ignored) {
+        }
+        p.edit().remove(NotificationActionReceiver.KEY_PENDING_QUEUE).remove(NotificationActionReceiver.KEY_PENDING_PLAY).apply();
+        call.resolve(o);
+    }
+
+    /** Files the background worker finished downloading: [{showId, guid, fileName, bytes}]. */
+    @PluginMethod
+    public void consumeDownloads(PluginCall call) {
+        android.content.SharedPreferences p = getContext().getSharedPreferences(FeedCheckWorker.PREFS, android.content.Context.MODE_PRIVATE);
+        JSObject o = new JSObject();
+        try {
+            o.put("downloads", new org.json.JSONArray(p.getString(FeedCheckWorker.KEY_PENDING_DOWNLOADS, "[]")));
+        } catch (Exception ignored) {
+        }
+        p.edit().remove(FeedCheckWorker.KEY_PENDING_DOWNLOADS).apply();
+        call.resolve(o);
+    }
+
     @PluginMethod
     public void getState(PluginCall call) {
         onMain(call, () -> call.resolve(JSObject.fromJSONObject(controller.state())));
