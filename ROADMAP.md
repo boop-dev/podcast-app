@@ -83,9 +83,9 @@ and decide on detection only after a feasibility spike.
 
 ## Downloads
 
-- [ ] Download all unplayed from a show — S
-- [ ] Download progress display — M
-- [ ] Storage cap (delete oldest past a limit) — S
+- [x] Download all unplayed from a show — S
+- [x] Download progress display — M
+- [x] Storage cap (delete oldest past a limit) — S
 - [ ] Download new episodes in the background — M
 
 ## Alerts and backup
@@ -113,5 +113,5 @@ and decide on detection only after a feasibility spike.
 
 - [ ] Chapters against a real feed that publishes them
 - [ ] Streaming through network drops and long episodes
-- [ ] Downloaded episodes through the native player
+- [x] Downloaded episodes through the native player
 - [ ] Background alert timing over a full day of real use

@@ -42,6 +42,12 @@ const PATHS = {
       <text x="12" y="15.5" fontSize={String(label).length > 2 ? 6 : 7.5} textAnchor="middle" fill="currentColor" stroke="none" fontWeight="700">{label}</text>
     </>
   ),
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3 2" />
+    </>
+  ),
   retry: <path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v5h-5" />,
   skipAhead: <path d="M5 5l7 7-7 7M13 5l7 7-7 7" />,
   download: <path d="M12 4v11M7 11l5 5 5-5M5 20h14" />,

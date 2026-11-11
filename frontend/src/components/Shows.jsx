@@ -5,6 +5,7 @@ import { api, exportOpmlToFile } from '../api'
 import EpisodeRow from './EpisodeRow'
 import Icon from './Icon'
 import { useBackHandler } from '../lib/back'
+import { enqueueMany } from '../lib/downloadManager'
 
 export default function Shows({ shows, onPlay, queueIds, onToggleQueue, onPlayNext, downloadedIds, onDownloadChanged, onRefresh }) {
   const [selected, setSelected] = useState(null) // a show row
@@ -16,6 +17,8 @@ export default function Shows({ shows, onPlay, queueIds, onToggleQueue, onPlayNe
   const [query, setQuery] = useState('')
   const [oldestFirst, setOldestFirst] = useState(false)
   const [skips, setSkips] = useState({ intro: 0, outro: 0 })
+  const [dlMenu, setDlMenu] = useState(false)
+  const [dlMsg, setDlMsg] = useState('')
 
   useEffect(() => {
     if (selected) api.getShowSkips(selected.id).then(setSkips).catch(() => {})
@@ -79,6 +82,17 @@ export default function Shows({ shows, onPlay, queueIds, onToggleQueue, onPlayNe
     if (selected) await api.markShowSeen(selected.id).catch(() => {})
     setSelected(null)
     onRefresh()
+  }
+
+  // Download the newest unplayed, not-yet-downloaded episodes of this show.
+  async function downloadUnplayed(limit) {
+    setDlMenu(false)
+    const todo = episodes.filter((ep) => !ep.completed && !downloadedIds.has(ep.id))
+    const picked = limit ? todo.slice(0, limit) : todo
+    if (picked.length === 0) return setDlMsg('Nothing to download: every unplayed episode is already saved.')
+    if (picked.length > 10 && !window.confirm(`Download ${picked.length} episodes? This can use a lot of storage.`)) return
+    const added = await enqueueMany(picked)
+    setDlMsg(`Queued ${added} episode${added === 1 ? '' : 's'}. Progress shows on each episode and in Settings.`)
   }
 
   async function markAllPlayed() {
@@ -179,6 +193,22 @@ export default function Shows({ shows, onPlay, queueIds, onToggleQueue, onPlayNe
             {hidePlayed ? 'Showing unplayed' : 'Hide played'}
           </button>
         </div>
+        <div className="toolbar" style={{ marginTop: 8 }}>
+          <button className={`pill${dlMenu ? ' on' : ''}`} onClick={() => setDlMenu(!dlMenu)} aria-expanded={dlMenu}>
+            <Icon name="download" size={16} /> Download unplayed
+          </button>
+        </div>
+        {dlMenu && (
+          <div className="toolbar queue-menu" style={{ marginTop: 0 }}>
+            <button onClick={() => downloadUnplayed(3)}>Newest 3</button>
+            <button onClick={() => downloadUnplayed(5)}>Newest 5</button>
+            <button onClick={() => downloadUnplayed(10)}>Newest 10</button>
+            <button onClick={() => downloadUnplayed(0)}>
+              All unplayed ({episodes.filter((ep) => !ep.completed && !downloadedIds.has(ep.id)).length})
+            </button>
+          </div>
+        )}
+        {dlMsg && <p className="muted" style={{ margin: '6px 0' }}>{dlMsg}</p>}
         <label className="setting-row">
           <span>
             Auto-download new episodes

@@ -8,6 +8,7 @@ import { syncAll } from './mobile/sync'
 import { handleBack } from './lib/back'
 import { NativeAudio } from './lib/nativeAudio'
 import { refreshFeedWatchList } from './lib/feedWatch'
+import { cleanupOrphans, enforceCap, onCompleted } from './lib/downloadManager'
 import Player from './components/Player'
 import Shows from './components/Shows'
 import SearchView from './components/SearchView'
@@ -106,6 +107,14 @@ export default function App() {
     document.addEventListener('visibilitychange', onVisible)
     return () => document.removeEventListener('visibilitychange', onVisible)
   }, [refreshShows, refreshDownloads])
+
+  // Downloads finish in the background: refresh the "downloaded" badges when they do.
+  // On start, remove half-written files and apply the storage cap.
+  useEffect(() => {
+    const off = onCompleted(() => refreshDownloads())
+    cleanupOrphans().then(() => enforceCap()).then(() => refreshDownloads()).catch(() => {})
+    return off
+  }, [refreshDownloads])
 
   // Keep the background checker's feed list current (new subscriptions, etc.).
   useEffect(() => {

@@ -26,6 +26,9 @@ import { buildOpmlXml, parseOpmlFeedUrls } from '../src/mobile/opml.js'
 import { normalizeChapters, parseDuration, parseFeedXml, textOf } from '../src/mobile/rss.js'
 import { currentChapter, splitTimestamps } from '../src/lib/notes.js'
 import { adRanges, isAdChapter } from '../src/lib/adChapters.js'
+import { DownloadQueue } from '../src/lib/downloadQueue.js'
+import { localName } from '../src/mobile/downloads.js'
+import { pickEvictions } from '../src/lib/storageCap.js'
 import * as store from '../src/mobile/store.js'
 import { mobileApi } from '../src/mobile/api.js'
 
@@ -298,6 +301,66 @@ try {
   await mobileApi.restoreBackup(JSON.stringify(backup))
   const restored = (await store.listShows())[0]
   check('restore brings back speed and skips', restored.skip_intro === 30 && restored.skip_outro === 60 && restored.playback_speed === 1.5)
+}
+
+// --- 13. Download queue + storage cap ---
+{
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+  const ep = (n) => ({ id: `ep_${n}`, title: `Episode ${n}`, audio_url: `https://x.test/${n}.mp3` })
+
+  let running = 0
+  let maxRunning = 0
+  const done = []
+  const failOnce = new Set(['ep_3'])
+  const q = new DownloadQueue({
+    concurrency: 2,
+    run: async (job, report) => {
+      running++
+      maxRunning = Math.max(maxRunning, running)
+      report(50, 100)
+      await sleep(25)
+      running--
+      if (failOnce.has(job.id)) { failOnce.delete(job.id); throw new Error('boom') }
+      report(100, 100)
+      return { bytes: 100 }
+    },
+    onDone: (job) => done.push(job.id),
+  })
+  check('queue: add returns true, duplicate returns false', q.add(ep(1)) === true && q.add(ep(1)) === false)
+  check('queue: addMany counts only new episodes', q.addMany([ep(1), ep(2), ep(3), ep(4), ep(5)]) === 4)
+  await sleep(5)
+  check('queue: reports progress on a running job', q.snapshot().some((j) => j.status === 'downloading' && j.bytes === 50 && j.total === 100))
+  await sleep(250)
+  check('queue: never runs more than 2 at once', maxRunning === 2, `max=${maxRunning}`)
+  const snap = Object.fromEntries(q.snapshot().map((j) => [j.id, j.status]))
+  check('queue: a failure does not stop the others', snap.ep_3 === 'failed' && done.length === 4, JSON.stringify(snap))
+  check('queue: failed job keeps its error', q.snapshot().find((j) => j.id === 'ep_3').error === 'boom')
+  check('queue: retry re-runs a failed job', q.retry('ep_3') === true && q.retry('ep_1') === false)
+  await sleep(80)
+  check('queue: retried job completes', done.includes('ep_3') && done.length === 5)
+
+  const q2 = new DownloadQueue({ concurrency: 1, run: async () => { await sleep(40); return { bytes: 1 } } })
+  q2.addMany([ep(10), ep(11), ep(12)])
+  check('queue: remove works on queued, not on a running job', q2.remove('ep_11') === true && q2.remove('ep_10') === false)
+  check('queue: clearQueued drops the waiting ones', q2.clearQueued() === 1 && q2.snapshot().length === 1)
+
+  check('localName: new records use the relative file name', localName({ path: 'ep_1.mp3', fileName: 'ep_1.mp3' }) === 'ep_1.mp3')
+  check('localName: old absolute-path records still resolve', localName({ path: '/data/user/0/dev.boop.podcastapp/files/ep_2.mp3' }) === 'ep_2.mp3')
+
+  check('settings: default when unset, value after set', (await store.getSetting('x-test', 7)) === 7 && (await (async () => { await store.setSetting('x-test', 0.5); return store.getSetting('x-test', 7) })()) === 0.5)
+
+  const MB = 1024 * 1024
+  const recs = [
+    { id: 'A', bytes: 100 * MB, downloadedAt: '2026-01-01T00:00:00Z', completed: true },
+    { id: 'B', bytes: 100 * MB, downloadedAt: '2025-12-01T00:00:00Z', completed: false },
+    { id: 'C', bytes: 100 * MB, downloadedAt: '2026-02-01T00:00:00Z', completed: true },
+    { id: 'D', bytes: 100 * MB, downloadedAt: '2025-11-01T00:00:00Z', completed: true },
+  ]
+  const ev = pickEvictions(recs, 250 * MB, ['D'])
+  check('cap: finished episodes go first, oldest first, protected kept', JSON.stringify(ev) === '["A","C"]', JSON.stringify(ev))
+  check('cap: unfinished episodes go after finished ones', JSON.stringify(pickEvictions(recs, 150 * MB, ['D'])) === '["A","C","B"]')
+  check('cap: no cap or under the cap evicts nothing', pickEvictions(recs, 0).length === 0 && pickEvictions(recs, 500 * MB).length === 0)
+  check('cap: all protected evicts nothing', pickEvictions(recs, 10 * MB, ['A', 'B', 'C', 'D']).length === 0)
 }
 
 // --- cleanup: delete-show cascade ---

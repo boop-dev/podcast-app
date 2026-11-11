@@ -463,3 +463,14 @@ button.link { color: var(--accent); text-decoration: underline; font: inherit; }
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
 }
 .ad-toast button { color: var(--accent); background: var(--surface); padding: 6px 14px; border-radius: 999px; font-weight: 700; }
+
+/* ---------- downloads ---------- */
+
+.icon-btn .failed { color: #e5484d; }
+.dl-job { padding: 8px 0; border-top: 1px solid var(--border); }
+.dl-job:first-of-type { border-top: 0; }
+.dl-title { font-size: 0.9rem; font-weight: 600; margin-bottom: 6px; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+.dl-bar { height: 5px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+.dl-bar > div { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.3s; }
+.dl-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; font-size: 0.8rem; }
+.dl-meta .pill { padding: 4px 12px; font-size: 0.8rem; }

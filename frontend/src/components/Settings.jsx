@@ -4,6 +4,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api'
 import { NativeAudio } from '../lib/nativeAudio'
 import { configureFeedWatch } from '../lib/feedWatch'
+import {
+  clearQueued, enforceCap, getCapGb, removeJob, retryJob, setCapGb, useDownloads,
+} from '../lib/downloadManager'
+import { CAP_OPTIONS_GB } from '../lib/storageCap'
 
 function formatBytes(n) {
   if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`
@@ -23,6 +27,28 @@ export default function Settings({ onChanged }) {
     skipAdChapters: false,
   })
   const [watch, setWatch] = useState({ enabled: false, intervalHours: 3 })
+  const jobs = useDownloads()
+  const [capGb, setCap] = useState(0)
+
+  useEffect(() => {
+    getCapGb().then(setCap).catch(() => {})
+  }, [])
+  const activeJobs = jobs.filter((j) => j.status !== 'done')
+  const finishedCount = jobs.filter((j) => j.status === 'done').length
+
+  // Refresh the sizes when downloads finish.
+  useEffect(() => {
+    if (finishedCount) load()
+  }, [finishedCount]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function changeCap(gb) {
+    setCap(gb)
+    await setCapGb(gb)
+    const res = await enforceCap()
+    if (res.removed) setMsg(`Removed ${res.removed} old download${res.removed === 1 ? '' : 's'} to stay under the cap.`)
+    load()
+    onChanged()
+  }
 
   useEffect(() => {
     NativeAudio.getFeedWatch()
@@ -187,6 +213,45 @@ export default function Settings({ onChanged }) {
       )}
 
       <h2 className="section">Downloads</h2>
+      {activeJobs.length > 0 && (
+        <div className="card">
+          <div className="queue-header" style={{ margin: '0 0 8px' }}>
+            <span className="row-title">Downloading ({activeJobs.length})</span>
+            {activeJobs.some((j) => j.status === 'queued') && (
+              <button className="pill" onClick={clearQueued}>Cancel queued</button>
+            )}
+          </div>
+          {activeJobs.map((j) => {
+            const pct = j.total ? Math.min(100, Math.round((j.bytes / j.total) * 100)) : 0
+            return (
+              <div key={j.id} className="dl-job">
+                <div className="dl-title">{j.episode.title}</div>
+                <div className="dl-bar"><div style={{ width: `${j.status === 'downloading' ? Math.max(pct, 2) : 0}%` }} /></div>
+                <div className="dl-meta">
+                  <span className="muted">
+                    {j.status === 'downloading' && `${pct}% · ${formatBytes(j.bytes)}${j.total ? ` of ${formatBytes(j.total)}` : ''}`}
+                    {j.status === 'queued' && 'Waiting'}
+                    {j.status === 'failed' && `Failed: ${j.error || 'unknown error'}`}
+                  </span>
+                  {j.status === 'failed' && <button className="pill" onClick={() => retryJob(j.id)}>Retry</button>}
+                  {j.status !== 'downloading' && <button className="pill" onClick={() => removeJob(j.id)}>Remove</button>}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+      <div className="setting-row">
+        <span>
+          Storage limit
+          <small>Deletes the oldest finished downloads first. Never what is playing or queued.</small>
+        </span>
+        <select value={capGb} onChange={(e) => changeCap(Number(e.target.value))}>
+          {CAP_OPTIONS_GB.map((g) => (
+            <option key={g} value={g}>{g === 0 ? 'No limit' : `${g} GB`}</option>
+          ))}
+        </select>
+      </div>
       {usage === null ? (
         <p className="muted">Measuring…</p>
       ) : usage.rows.length === 0 ? (

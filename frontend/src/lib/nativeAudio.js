@@ -7,6 +7,7 @@
 
 import { registerPlugin } from '@capacitor/core'
 import { Directory, Filesystem } from '@capacitor/filesystem'
+import { localName } from '../mobile/downloads.js'
 import * as store from '../mobile/store.js'
 
 export const NativeAudio = registerPlugin('NativeAudio')
@@ -16,7 +17,7 @@ async function nativeSrc(episode) {
   const record = await store.getDownload(episode.id)
   if (record && record.path) {
     try {
-      const { uri } = await Filesystem.getUri({ path: record.path, directory: Directory.Data })
+      const { uri } = await Filesystem.getUri({ path: localName(record), directory: Directory.Data })
       return uri
     } catch {
       /* file gone: fall back to streaming */

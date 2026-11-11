@@ -24,6 +24,7 @@ import { CapacitorHttp } from '@capacitor/core'
 import { Directory, Filesystem } from '@capacitor/filesystem'
 import { buildOpmlXml, parseOpmlFeedUrls } from './opml.js'
 import { fetchFeed, httpGetJson, normalizeChapters } from './rss.js'
+import { localName } from './downloads.js'
 import * as store from './store.js'
 
 const ITUNES_SEARCH_URL = 'https://itunes.apple.com/search'
@@ -66,7 +67,7 @@ async function deleteDownloadIfAuto(ep) {
   if (!show || !show.auto_download) return
   const dl = await store.getDownload(ep.id)
   if (dl && dl.path) {
-    await Filesystem.deleteFile({ path: dl.path, directory: Directory.Data }).catch(() => {})
+    await Filesystem.deleteFile({ path: localName(dl), directory: Directory.Data }).catch(() => {})
   }
   if (dl) await store.removeDownload(ep.id)
 }
@@ -242,7 +243,7 @@ export const mobileApi = {
     for (const ep of episodes) {
       const dl = await store.getDownload(ep.id)
       if (dl && dl.path) {
-        await Filesystem.deleteFile({ path: dl.path, directory: Directory.Data }).catch(() => {})
+        await Filesystem.deleteFile({ path: localName(dl), directory: Directory.Data }).catch(() => {})
       }
     }
     await store.deleteShowAndEpisodes(showId)
@@ -398,7 +399,7 @@ export const mobileApi = {
       if (!dl || !dl.path || !ep || !byShow.has(ep.show_id)) continue
       let size = 0
       try {
-        size = Number((await Filesystem.stat({ path: dl.path, directory: Directory.Data })).size) || 0
+        size = Number(dl.bytes) || Number((await Filesystem.stat({ path: localName(dl), directory: Directory.Data })).size) || 0
       } catch {
         /* file missing: counts as zero */
       }
@@ -422,7 +423,7 @@ export const mobileApi = {
       }
       const dl = await store.getDownload(id)
       if (dl && dl.path) {
-        await Filesystem.deleteFile({ path: dl.path, directory: Directory.Data }).catch(() => {})
+        await Filesystem.deleteFile({ path: localName(dl), directory: Directory.Data }).catch(() => {})
       }
       await store.removeDownload(id)
       removed++

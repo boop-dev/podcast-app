@@ -7,7 +7,7 @@
  */
 
 import { mobileApi } from './api.js'
-import { downloadEpisodeNative } from './downloads.js'
+import { enqueueMany } from '../lib/downloadManager.js'
 import * as store from './store.js'
 
 const MIN_INTERVAL_MS = 30 * 60 * 1000
@@ -53,14 +53,8 @@ export async function syncAll({ force = false } = {}) {
           if (ep) episodes.push(ep)
         }
         episodes.sort((a, b) => ((b.pub_date || '') < (a.pub_date || '') ? -1 : 1))
-        for (const ep of episodes.slice(0, MAX_AUTO_PER_SHOW)) {
-          try {
-            await downloadEpisodeNative(ep)
-            downloaded++
-          } catch {
-            /* one failed download should not stop the sync */
-          }
-        }
+        // Queued, not awaited: the manager downloads in the background and shows progress.
+        downloaded += await enqueueMany(episodes.slice(0, MAX_AUTO_PER_SHOW)).catch(() => 0)
       }
     } catch {
       /* feed unreachable: skip it and carry on */

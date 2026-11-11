@@ -19,8 +19,9 @@ Media3 ExoPlayer service for playback.
   own.
 - **Library**: new-episode badges, played / unplayed, search, sort, mark all
   played, unsubscribe, a Home tab with "continue listening".
-- **Offline**: per-episode downloads and Wi-Fi-only auto-download for chosen
-  shows; a storage manager.
+- **Offline**: a download queue with progress, "download unplayed" per show,
+  Wi-Fi-only auto-download for chosen shows, a storage limit that removes the
+  oldest downloads, and a storage manager.
 - **New-episode alerts** in the background (off by default).
 - Light and dark themes that follow the system.
 

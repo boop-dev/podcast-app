@@ -1,12 +1,13 @@
-/* Offline downloads: real files via @capacitor/filesystem (see
- * src/mobile/downloads.js). The native player plays them from disk. */
+/* Offline downloads. Downloading goes through the queue in downloadManager.js
+ * (progress, retry, storage cap); removing a download is immediate. */
 
 import { api } from '../api.js'
-import { downloadEpisodeNative, isDownloadedNative, removeDownloadNative } from '../mobile/downloads.js'
+import { isDownloadedNative, removeDownloadNative } from '../mobile/downloads.js'
+import { enqueue } from './downloadManager.js'
 
+/** Queue an episode for download (returns at once; watch progress with useDownloadJob). */
 export async function downloadEpisode(episode) {
-  await downloadEpisodeNative(episode)
-  await api.markDownloaded(episode.id)
+  return enqueue(episode)
 }
 
 export async function removeDownload(episode) {

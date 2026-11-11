@@ -44,6 +44,20 @@ const stores = {
   positions: localforage.createInstance({ name: 'podcast-app', storeName: 'positions' }),
   queue: localforage.createInstance({ name: 'podcast-app', storeName: 'queue' }),
   downloads: localforage.createInstance({ name: 'podcast-app', storeName: 'downloads' }),
+  settings: localforage.createInstance({ name: 'podcast-app', storeName: 'settings' }),
+}
+
+// --- settings --------------------------------------------------------------
+// Small app settings that must survive the process being killed (unlike
+// localStorage, IndexedDB writes are durable).
+
+export async function getSetting(key, fallback = null) {
+  const v = await stores.settings.getItem(key)
+  return v === null || v === undefined ? fallback : v
+}
+
+export async function setSetting(key, value) {
+  await stores.settings.setItem(key, value)
 }
 
 const QUEUE_KEY = 'order' // queue store holds one key: the ordered id list
