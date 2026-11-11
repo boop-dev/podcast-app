@@ -14,7 +14,14 @@ function formatBytes(n) {
 export default function Settings({ onChanged }) {
   const [usage, setUsage] = useState(null)
   const [msg, setMsg] = useState('')
-  const [options, setOptions] = useState({ skipSilence: false, boost: false })
+  const [options, setOptions] = useState({
+    skipSilence: false,
+    boost: false,
+    skipBackSec: 15,
+    skipForwardSec: 30,
+    skipAheadSec: 60,
+    skipAdChapters: false,
+  })
   const [watch, setWatch] = useState({ enabled: false, intervalHours: 3 })
 
   useEffect(() => {
@@ -52,11 +59,15 @@ export default function Settings({ onChanged }) {
     NativeAudio.getOptions().then(setOptions).catch(() => {})
   }, [])
 
-  function changeOption(key) {
-    const next = { ...options, [key]: !options[key] }
+  function saveOptions(next) {
     setOptions(next)
-    NativeAudio.setOptions(next).catch(() => setOptions(options))
+    NativeAudio.setOptions(next)
+      .then(() => window.dispatchEvent(new Event('podcast-options-changed')))
+      .catch(() => setOptions(options))
   }
+
+  const changeOption = (key) => saveOptions({ ...options, [key]: !options[key] })
+  const changeNumber = (key, value) => saveOptions({ ...options, [key]: Number(value) })
 
   const load = useCallback(() => {
     api.storageUsage().then(setUsage).catch((err) => setMsg(err.message))
@@ -120,6 +131,35 @@ export default function Settings({ onChanged }) {
         </span>
         <input type="checkbox" checked={options.boost} onChange={() => changeOption('boost')} />
       </label>
+
+      <label className="setting-row">
+        <span>
+          Skip ad chapters
+          <small>Auto-skips chapters a feed labels Ad or Sponsor. Undo shows after each skip.</small>
+        </span>
+        <input type="checkbox" checked={options.skipAdChapters} onChange={() => changeOption('skipAdChapters')} />
+      </label>
+      <div className="setting-row">
+        <span>Skip back</span>
+        <select value={options.skipBackSec} onChange={(e) => changeNumber('skipBackSec', e.target.value)}>
+          {[5, 10, 15, 30].map((s) => <option key={s} value={s}>{s} s</option>)}
+        </select>
+      </div>
+      <div className="setting-row">
+        <span>Skip forward</span>
+        <select value={options.skipForwardSec} onChange={(e) => changeNumber('skipForwardSec', e.target.value)}>
+          {[15, 30, 45, 60].map((s) => <option key={s} value={s}>{s} s</option>)}
+        </select>
+      </div>
+      <div className="setting-row">
+        <span>
+          Skip ahead button
+          <small>The long jump in the player, for getting past an ad.</small>
+        </span>
+        <select value={options.skipAheadSec} onChange={(e) => changeNumber('skipAheadSec', e.target.value)}>
+          {[30, 60, 90, 120, 180].map((s) => <option key={s} value={s}>{s} s</option>)}
+        </select>
+      </div>
 
       <h2 className="section">New episodes</h2>
       <label className="setting-row">

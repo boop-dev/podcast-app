@@ -27,13 +27,16 @@ async function nativeSrc(episode) {
 
 /** An episode in the shape NativeAudioPlugin expects. */
 export async function toItem(episode, fallbackShowTitle = '') {
+  const show = await store.getShow(episode.show_id).catch(() => null)
   return {
     id: episode.id,
     url: await nativeSrc(episode),
     title: episode.title || '',
     artist: episode.show_title || fallbackShowTitle || '',
     artwork: episode.image_url || episode.show_image || '',
-    speed: (await store.getShow(episode.show_id).catch(() => null))?.playback_speed || 1,
+    speed: (show && show.playback_speed) || 1,
+    introMs: ((show && show.skip_intro) || 0) * 1000,
+    outroMs: ((show && show.skip_outro) || 0) * 1000,
   }
 }
 

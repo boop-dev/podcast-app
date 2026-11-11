@@ -25,6 +25,7 @@ import 'fake-indexeddb/auto'
 import { buildOpmlXml, parseOpmlFeedUrls } from '../src/mobile/opml.js'
 import { normalizeChapters, parseDuration, parseFeedXml, textOf } from '../src/mobile/rss.js'
 import { currentChapter, splitTimestamps } from '../src/lib/notes.js'
+import { adRanges, isAdChapter } from '../src/lib/adChapters.js'
 import * as store from '../src/mobile/store.js'
 import { mobileApi } from '../src/mobile/api.js'
 
@@ -262,6 +263,41 @@ try {
   check('removeFromQueue leaves the rest in order', (await order()).length === 3 && !(await order()).includes(c.id))
   const cleared = await mobileApi.clearQueue()
   check('clearQueue empties the queue', cleared.cleared === 3 && (await order()).length === 0)
+}
+
+// --- 12. Ad chapters, per-show skips ---
+{
+  const yes = ['Ad', 'Ads', 'Sponsor', 'Sponsored by Squarespace', 'Advertisement', 'Mid-roll ad break', 'Ad read: NordVPN', 'Promo for another show', 'Commercial break']
+  const no = ['Intro', 'Introduction', 'Add to cart', "Brad's story", 'Radiolab', 'Adventure time', 'Read the room', 'Padding', 'Main story']
+  check('isAdChapter flags ad-like titles', yes.every((t) => isAdChapter(t)), yes.filter((t) => !isAdChapter(t)).join(', '))
+  check('isAdChapter ignores look-alikes', no.every((t) => !isAdChapter(t)), no.filter((t) => isAdChapter(t)).join(', '))
+
+  const chapters = [
+    { start: 0, title: 'Intro' }, { start: 600, title: 'Ad' }, { start: 660, title: 'Main story' },
+    { start: 1800, title: 'Sponsor' }, { start: 1860, title: 'Sponsor read' }, { start: 2000, title: 'Outro' },
+  ]
+  const r = adRanges(chapters, 2100)
+  check('adRanges: ad chapters become skip ranges', r.length === 2 && r[0].startMs === 600000 && r[0].endMs === 660000, JSON.stringify(r))
+  check('adRanges: consecutive ad chapters merge', r[1].startMs === 1800000 && r[1].endMs === 2000000)
+  const tail = adRanges([{ start: 0, title: 'Show' }, { start: 3000, title: 'Ad' }], 3060)
+  check('adRanges: a trailing ad runs to the end of the episode', tail.length === 1 && tail[0].endMs === 3060000)
+  check('adRanges: no ads, or unknown duration, gives nothing to skip',
+    adRanges([{ start: 0, title: 'Intro' }], 100).length === 0 && adRanges([{ start: 0, title: 'Ad' }], 0).length === 0)
+
+  const sid = (await store.listShows())[0].id
+  const none = await mobileApi.getShowSkips(sid)
+  check('show skips default to off', none.intro === 0 && none.outro === 0)
+  await mobileApi.setShowSkips(sid, { intro: 30, outro: 60 })
+  await mobileApi.setPlaybackSpeed(sid, 1.5)
+  const got = await mobileApi.getShowSkips(sid)
+  check('show skips persist', got.intro === 30 && got.outro === 60)
+  check('refresh keeps show skips', (await (async () => { const sh = await store.getShow(sid); await store.putShow({ ...sh, title: sh.title }); return mobileApi.getShowSkips(sid) })()).intro === 30)
+  const backup = await mobileApi.buildBackup()
+  check('backup includes per-show settings', backup.shows[0].skip_intro === 30 && backup.shows[0].skip_outro === 60 && backup.shows[0].playback_speed === 1.5)
+  await store.clearAll()
+  await mobileApi.restoreBackup(JSON.stringify(backup))
+  const restored = (await store.listShows())[0]
+  check('restore brings back speed and skips', restored.skip_intro === 30 && restored.skip_outro === 60 && restored.playback_speed === 1.5)
 }
 
 // --- cleanup: delete-show cascade ---

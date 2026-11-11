@@ -54,9 +54,10 @@ episode, and dynamically inserted ads differ per download, so shared
 timestamps do not line up. The plan is to start with cheap, reliable helpers
 and decide on detection only after a feasibility spike.
 
-- [ ] Configurable long-skip button (e.g. +60s) in the player and notification — S
-- [ ] Per-show skip intro / outro seconds — S
-- [ ] Auto-skip chapters titled "Ad" / "Sponsor" when a feed marks them (opt-in) — S
+- [x] Configurable skip back / forward and a long-skip button in the player — S
+- [ ] Long-skip in the notification or as a headset gesture — S
+- [x] Per-show skip intro / outro seconds — S
+- [x] Auto-skip chapters titled "Ad" / "Sponsor" when a feed marks them (opt-in) — S
 - [ ] Manual "mark ad" while listening: remember skip ranges per episode — M
 - [ ] Feasibility spike: on-device detection (repeated-segment fingerprinting
       per show, transcript keywords, chapter hints). Written findings + decision — M
@@ -66,7 +67,7 @@ and decide on detection only after a feasibility spike.
 
 - [ ] Sleep timer: shake to extend, fade-out before pausing — S
 - [ ] Finer speed control (0.05x steps) — S
-- [ ] Buffering and error states in the player (spinner, message, retry) — S
+- [x] Buffering and error states in the player (spinner, message, retry) — S
 - [ ] Chapter artwork in the player — S
 - [ ] Current chapter in the lock-screen / notification card — M
 

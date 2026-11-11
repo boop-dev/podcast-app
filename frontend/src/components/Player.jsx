@@ -8,7 +8,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import { NativeAudio, applyDrain, toItem } from '../lib/nativeAudio'
+import { adRanges } from '../lib/adChapters'
 import PlayerView, { SPEEDS } from './PlayerView'
+
+const ERROR_TEXT = {
+  network: "Can't reach the server. Check your connection.",
+  unavailable: "This episode isn't available. The link may be dead.",
+  unsupported: "This audio file can't be played.",
+  unknown: 'Something went wrong playing this episode.',
+}
+const DEFAULT_OPTIONS = { skipBackSec: 15, skipForwardSec: 30, skipAheadSec: 60, skipAdChapters: false }
 
 const POLL_MS = 500
 const DRAIN_EVERY = 10 // polls
@@ -17,6 +26,9 @@ export default function Player({ nowPlaying, queue, onNativeChange, onQueueChang
   const [snap, setSnap] = useState(null)
   const [sleepChoice, setSleepChoice] = useState('0')
   const [chapters, setChapters] = useState([])
+  const [opts, setOpts] = useState(DEFAULT_OPTIONS)
+  const [adToast, setAdToast] = useState(null)
+  const undone = useRef(new Set()) // ad ranges the listener chose to un-skip, by startMs
   const [, setTick] = useState(0)
 
   const episode = nowPlaying ? nowPlaying.episode : null
@@ -42,13 +54,15 @@ export default function Player({ nowPlaying, queue, onNativeChange, onQueueChang
         const resume =
           pos.position_seconds > 10 &&
           !(ep.duration_seconds && pos.position_seconds > ep.duration_seconds - 30)
+        const skips = await api.getShowSkips(ep.show_id).catch(() => ({ intro: 0, outro: 0 }))
         const upNext = await Promise.all(
           queueRef.current.filter((q) => q.id !== ep.id).map((q) => toItem(q)),
         )
         await NativeAudio.load({
           item: await toItem(ep, nowPlaying.showTitle),
           upNext,
-          startPositionMs: resume ? Math.round(pos.position_seconds * 1000) : 0,
+          // Resume where you left off; a fresh episode starts after the show's intro.
+          startPositionMs: resume ? Math.round(pos.position_seconds * 1000) : skips.intro * 1000,
           autoplay: nowPlaying.autoplay,
           speed: await api.getPlaybackSpeed(ep.show_id).catch(() => 1),
         })
@@ -127,6 +141,29 @@ export default function Player({ nowPlaying, queue, onNativeChange, onQueueChang
     }
   }, [queue, currentId, hasMedia])
 
+  // Skip amounts and the ad-chapter switch live in Settings (native prefs).
+  useEffect(() => {
+    const load = () => NativeAudio.getOptions().then((o) => setOpts({ ...DEFAULT_OPTIONS, ...o })).catch(() => {})
+    load()
+    window.addEventListener('podcast-options-changed', load)
+    return () => window.removeEventListener('podcast-options-changed', load)
+  }, [])
+
+  // "Skipped an ad" notice with Undo (only if it just happened and we can see it).
+  useEffect(() => {
+    let timer
+    const listener = NativeAudio.addListener('adSkipped', (e) => {
+      if (Date.now() - e.at > 15000 || document.visibilityState !== 'visible') return
+      setAdToast({ ...e, text: 'Skipped an ad' })
+      clearTimeout(timer)
+      timer = setTimeout(() => setAdToast(null), 8000)
+    })
+    return () => {
+      clearTimeout(timer)
+      Promise.resolve(listener).then((l) => l && l.remove && l.remove())
+    }
+  }, [])
+
   // Chapters for the current episode (fetched once, then cached on-device).
   useEffect(() => {
     setChapters([])
@@ -140,6 +177,25 @@ export default function Player({ nowPlaying, queue, onNativeChange, onQueueChang
       cancelled = true
     }
   }, [episodeId])
+
+  // Tell the player which chapters are ads, so it skips them even with the screen off.
+  const durationMs = snap ? snap.durationMs : 0
+  const adSwitch = snap ? snap.skipAdChapters : opts.skipAdChapters
+  useEffect(() => {
+    if (!episodeId || !durationMs) return
+    undone.current = new Set()
+    const ranges = adSwitch ? adRanges(chapters, durationMs / 1000) : []
+    NativeAudio.setSkipRanges({ id: episodeId, ranges }).catch(() => {})
+  }, [episodeId, chapters, durationMs, adSwitch])
+
+  function undoAdSkip() {
+    if (!adToast) return
+    undone.current.add(adToast.startMs)
+    NativeAudio.seekTo({ positionMs: adToast.startMs })
+    const ranges = adRanges(chapters, durationMs / 1000).filter((r) => !undone.current.has(r.startMs))
+    NativeAudio.setSkipRanges({ id: adToast.id, ranges }).catch(() => {})
+    setAdToast(null)
+  }
 
   // The sleep countdown ticks once a second while a timer runs.
   const sleepActive = snap && snap.sleepEndsAt > 0
@@ -169,6 +225,15 @@ export default function Player({ nowPlaying, queue, onNativeChange, onQueueChang
       sleepLeft={sleepLeft}
       chapters={chapters}
       description={episode ? episode.description : null}
+      skipBack={opts.skipBackSec}
+      skipForward={opts.skipForwardSec}
+      skipAhead={opts.skipAheadSec}
+      onSkipAhead={() => NativeAudio.seekBy({ deltaMs: opts.skipAheadSec * 1000 })}
+      buffering={Boolean(snap && snap.playWhenReady && snap.state === 'buffering' && !snap.error)}
+      errorMessage={snap && snap.error ? ERROR_TEXT[snap.error] || ERROR_TEXT.unknown : null}
+      onRetry={() => NativeAudio.retry().catch(() => {})}
+      adToast={adToast}
+      onUndoAd={undoAdSkip}
       onToggle={() => {
         if (isPlaying) NativeAudio.pause()
         else NativeAudio.play()

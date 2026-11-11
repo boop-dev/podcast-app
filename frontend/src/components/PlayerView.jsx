@@ -43,6 +43,15 @@ export default function PlayerView({
   onSleepChange,
   chapters = [],
   description = null,
+  skipBack = 15,
+  skipForward = 30,
+  skipAhead = 60,
+  onSkipAhead,
+  buffering = false,
+  errorMessage = null,
+  onRetry,
+  adToast = null, // {text} while a "skipped an ad" notice is showing
+  onUndoAd,
 }) {
   const [expanded, setExpanded] = useState(false)
   const [panel, setPanel] = useState(null) // null | 'chapters' | 'notes'
@@ -62,16 +71,33 @@ export default function PlayerView({
           <Artwork src={artwork} size={44} />
           <span className="mini-text">
             <span className="mini-title">{episode.title}</span>
-            <span className="mini-show">{title}</span>
+            {errorMessage ? (
+              <span className="mini-show mini-error">{errorMessage}</span>
+            ) : (
+              <span className="mini-show">{title}</span>
+            )}
           </span>
         </button>
-        <button className="icon-btn" onClick={() => onSkip(-15)} aria-label="Back 15 seconds">
-          <Icon name="back15" size={26} />
+        <button className="icon-btn" onClick={() => onSkip(-skipBack)} aria-label={`Back ${skipBack} seconds`}>
+          <Icon name="back15" size={26} label={skipBack} />
         </button>
-        <button className="icon-btn play-btn" onClick={onToggle} aria-label={isPlaying ? 'Pause' : 'Play'}>
-          <Icon name={isPlaying ? 'pause' : 'play'} size={26} />
-        </button>
+        {errorMessage ? (
+          <button className="icon-btn play-btn" onClick={onRetry} aria-label="Retry">
+            <Icon name="retry" size={26} />
+          </button>
+        ) : (
+          <button className="icon-btn play-btn" onClick={onToggle} aria-label={isPlaying ? 'Pause' : 'Play'}>
+            {buffering ? <span className="spinner" aria-label="Loading" /> : <Icon name={isPlaying ? 'pause' : 'play'} size={26} />}
+          </button>
+        )}
       </div>
+
+      {adToast && (
+        <div className="ad-toast" role="status">
+          <span>{adToast.text}</span>
+          <button onClick={onUndoAd}>Undo</button>
+        </div>
+      )}
 
       {expanded && (
         <div className="sheet" role="dialog" aria-label="Now playing">
@@ -111,18 +137,32 @@ export default function PlayerView({
           </div>
 
           <div className="transport">
-            <button className="icon-btn" onClick={() => onSkip(-15)} aria-label="Back 15 seconds">
-              <Icon name="back15" size={38} />
+            <button className="icon-btn" onClick={() => onSkip(-skipBack)} aria-label={`Back ${skipBack} seconds`}>
+              <Icon name="back15" size={38} label={skipBack} />
             </button>
             <button className="big-play" onClick={onToggle} aria-label={isPlaying ? 'Pause' : 'Play'}>
-              <Icon name={isPlaying ? 'pause' : 'play'} size={34} />
+              {buffering ? <span className="spinner big" aria-label="Loading" /> : <Icon name={isPlaying ? 'pause' : 'play'} size={34} />}
             </button>
-            <button className="icon-btn" onClick={() => onSkip(30)} aria-label="Forward 30 seconds">
-              <Icon name="fwd30" size={38} />
+            <button className="icon-btn" onClick={() => onSkip(skipForward)} aria-label={`Forward ${skipForward} seconds`}>
+              <Icon name="fwd30" size={38} label={skipForward} />
             </button>
           </div>
 
+          {errorMessage && (
+            <div className="player-error" role="alert">
+              <span>{errorMessage}</span>
+              <button className="pill" onClick={onRetry}>
+                Retry
+              </button>
+            </div>
+          )}
+
           <div className="sheet-extras">
+            {onSkipAhead && (
+              <button className="chip" onClick={onSkipAhead} title="Skip ahead (e.g. past an ad)">
+                <Icon name="skipAhead" size={16} /> {formatDuration(skipAhead)}
+              </button>
+            )}
             <button className="chip" onClick={onCycleSpeed} title="Playback speed">
               {speed}×
             </button>

@@ -27,6 +27,10 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.List;
 
 /**
@@ -45,6 +49,8 @@ public final class AudioController {
     public interface Listener {
         void onChange();
         void onError(String message);
+
+        void onAdSkipped(String id, long startMs, long endMs);
     }
 
     private static final String PREFS = "native_audio";
@@ -54,6 +60,13 @@ public final class AudioController {
     private static final String KEY_SKIP_SILENCE = "opt_skip_silence";
     private static final String KEY_BOOST = "opt_boost";
     private static final String KEY_RESUME = "resume";
+    private static final String KEY_SKIP_BACK = "opt_skip_back";
+    private static final String KEY_SKIP_FORWARD = "opt_skip_forward";
+    private static final String KEY_SKIP_AHEAD = "opt_skip_ahead";
+    private static final String KEY_SKIP_ADS = "opt_skip_ad_chapters";
+    private static final String KEY_RANGES = "skip_ranges";
+    private static final long TICK_INTERVAL_MS = 500;
+    private static final int MAX_RANGE_EPISODES = 30;
     private static final int BOOST_GAIN_MB = 600; // +6 dB for quiet voices
 
     private static AudioController instance;
@@ -72,6 +85,13 @@ public final class AudioController {
     private JSONObject dirty = new JSONObject();      // id -> {positionMs, durationMs, completed}
     private JSONArray consumed = new JSONArray();     // ids that auto-started from the up-next list
     private String lastId = null;
+    private int skipBackSec = 15;
+    private int skipForwardSec = 30;
+    private int skipAheadSec = 60;
+    private boolean skipAdChapters = false;
+    @Nullable private String lastError = null;
+    // episode id -> [startMs, endMs] ranges to skip (ad chapters), oldest first
+    private final Map<String, List<long[]>> ranges = new LinkedHashMap<>();
     private boolean skipSilence = false;
     private boolean boost = false;
     @Nullable private LoudnessEnhancer enhancer;
@@ -93,6 +113,15 @@ public final class AudioController {
         public void run() {
             saveNow();
             if (player.isPlaying()) main.postDelayed(this, SAVE_INTERVAL_MS);
+        }
+    };
+
+    // While playing, every half second: skip ad ranges and the per-show outro.
+    private final Runnable tickRunnable = new Runnable() {
+        @Override
+        public void run() {
+            tick();
+            if (player.isPlaying()) main.postDelayed(this, TICK_INTERVAL_MS);
         }
     };
 
@@ -129,6 +158,11 @@ public final class AudioController {
                 .setSeekForwardIncrementMs(30_000)
                 .build();
 
+        skipBackSec = prefs.getInt(KEY_SKIP_BACK, 15);
+        skipForwardSec = prefs.getInt(KEY_SKIP_FORWARD, 30);
+        skipAheadSec = prefs.getInt(KEY_SKIP_AHEAD, 60);
+        skipAdChapters = prefs.getBoolean(KEY_SKIP_ADS, false);
+        loadRanges();
         skipSilence = prefs.getBoolean(KEY_SKIP_SILENCE, false);
         boost = prefs.getBoolean(KEY_BOOST, false);
         player.setSkipSilenceEnabled(skipSilence);
@@ -147,6 +181,13 @@ public final class AudioController {
                     player.setPlaybackSpeed(item.mediaMetadata.extras.getFloat("speed", 1f));
                 }
                 String newId = item == null ? null : item.mediaId;
+                lastError = null;
+                // Per-show intro skip when the queue moves on to the next episode by itself.
+                if (item != null && reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO
+                        && item.mediaMetadata.extras != null) {
+                    long intro = item.mediaMetadata.extras.getLong("introMs", 0);
+                    if (intro > 0) player.seekTo(intro);
+                }
                 if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO && lastId != null) {
                     recordCompleted(lastId);
                     if (newId != null) consumed.put(newId);
@@ -158,6 +199,7 @@ public final class AudioController {
 
             @Override
             public void onPlaybackStateChanged(int state) {
+                if (state == Player.STATE_READY) lastError = null;
                 if (state == Player.STATE_ENDED && lastId != null) {
                     recordCompleted(lastId);
                     persist();
@@ -180,13 +222,18 @@ public final class AudioController {
             @Override
             public void onIsPlayingChanged(boolean isPlaying) {
                 main.removeCallbacks(saveRunnable);
+                main.removeCallbacks(tickRunnable);
                 saveNow();
-                if (isPlaying) main.postDelayed(saveRunnable, SAVE_INTERVAL_MS);
+                if (isPlaying) {
+                    main.postDelayed(saveRunnable, SAVE_INTERVAL_MS);
+                    main.post(tickRunnable);
+                }
                 notifyChange();
             }
 
             @Override
             public void onPlayerError(PlaybackException error) {
+                lastError = errorKind(error);
                 if (listener != null) listener.onError(error.getErrorCodeName() + ": " + error.getMessage());
                 notifyChange();
             }
@@ -213,10 +260,16 @@ public final class AudioController {
         }
     }
 
-    public void setOptions(boolean skipSilence, boolean boost) {
+    public void setOptions(boolean skipSilence, boolean boost, int backSec, int forwardSec, int aheadSec, boolean skipAds) {
         this.skipSilence = skipSilence;
         this.boost = boost;
-        prefs.edit().putBoolean(KEY_SKIP_SILENCE, skipSilence).putBoolean(KEY_BOOST, boost).apply();
+        this.skipBackSec = Math.max(1, backSec);
+        this.skipForwardSec = Math.max(1, forwardSec);
+        this.skipAheadSec = Math.max(1, aheadSec);
+        this.skipAdChapters = skipAds;
+        prefs.edit().putBoolean(KEY_SKIP_SILENCE, skipSilence).putBoolean(KEY_BOOST, boost)
+                .putInt(KEY_SKIP_BACK, this.skipBackSec).putInt(KEY_SKIP_FORWARD, this.skipForwardSec)
+                .putInt(KEY_SKIP_AHEAD, this.skipAheadSec).putBoolean(KEY_SKIP_ADS, skipAds).apply();
         player.setSkipSilenceEnabled(skipSilence);
         applyBoost();
     }
@@ -226,6 +279,10 @@ public final class AudioController {
         try {
             o.put("skipSilence", skipSilence);
             o.put("boost", boost);
+            o.put("skipBackSec", skipBackSec);
+            o.put("skipForwardSec", skipForwardSec);
+            o.put("skipAheadSec", skipAheadSec);
+            o.put("skipAdChapters", skipAdChapters);
         } catch (JSONException ignored) {
         }
         return o;
@@ -249,6 +306,135 @@ public final class AudioController {
     }
 
     /** Remember where the current item is, so JS can pick it up later. */
+    // --- skipping ---------------------------------------------------------
+
+    public long skipBackMs() {
+        return skipBackSec * 1000L;
+    }
+
+    public long skipForwardMs() {
+        return skipForwardSec * 1000L;
+    }
+
+    public void seekBackConfigured() {
+        player.seekTo(Math.max(0, player.getCurrentPosition() - skipBackMs()));
+    }
+
+    public void seekForwardConfigured() {
+        player.seekTo(player.getCurrentPosition() + skipForwardMs());
+    }
+
+    /** Finish the current episode now: mark it played and move on (or end). */
+    private void skipToEnd() {
+        if (lastId != null) recordCompleted(lastId);
+        if (player.hasNextMediaItem()) {
+            int next = player.getNextMediaItemIndex();
+            if (next != C.INDEX_UNSET) consumed.put(player.getMediaItemAt(next).mediaId);
+            persist();
+            player.seekToNextMediaItem();
+        } else {
+            persist();
+            long dur = player.getDuration();
+            if (dur != C.TIME_UNSET) player.seekTo(dur);
+        }
+    }
+
+    private void tick() {
+        MediaItem item = player.getCurrentMediaItem();
+        if (item == null || lastId == null) return;
+        long pos = player.getCurrentPosition();
+        long dur = player.getDuration();
+        if (skipAdChapters) {
+            List<long[]> list = ranges.get(lastId);
+            if (list != null) {
+                for (long[] r : list) {
+                    if (pos >= r[0] && pos < r[1] - 400) {
+                        String id = lastId;
+                        if (dur != C.TIME_UNSET && r[1] >= dur - 1500) skipToEnd();
+                        else player.seekTo(r[1]);
+                        if (listener != null) listener.onAdSkipped(id, r[0], r[1]);
+                        return;
+                    }
+                }
+            }
+        }
+        long outro = item.mediaMetadata.extras == null ? 0 : item.mediaMetadata.extras.getLong("outroMs", 0);
+        if (outro > 0 && dur != C.TIME_UNSET && dur > outro && pos >= dur - outro) skipToEnd();
+    }
+
+    /** Ranges to skip for an episode (ad chapters). An empty array clears them. */
+    public void setSkipRanges(String id, JSONArray arr) throws JSONException {
+        List<long[]> list = new ArrayList<>();
+        for (int i = 0; arr != null && i < arr.length(); i++) {
+            JSONObject o = arr.getJSONObject(i);
+            long s = o.getLong("startMs");
+            long e = o.getLong("endMs");
+            if (e > s) list.add(new long[]{s, e});
+        }
+        ranges.remove(id);
+        if (!list.isEmpty()) ranges.put(id, list);
+        while (ranges.size() > MAX_RANGE_EPISODES) {
+            Iterator<String> it = ranges.keySet().iterator();
+            it.next();
+            it.remove();
+        }
+        JSONObject out = new JSONObject();
+        for (Map.Entry<String, List<long[]>> en : ranges.entrySet()) {
+            JSONArray rs = new JSONArray();
+            for (long[] r : en.getValue()) rs.put(new JSONArray().put(r[0]).put(r[1]));
+            out.put(en.getKey(), rs);
+        }
+        prefs.edit().putString(KEY_RANGES, out.toString()).apply();
+    }
+
+    private void loadRanges() {
+        try {
+            JSONObject o = new JSONObject(prefs.getString(KEY_RANGES, "{}"));
+            JSONArray names = o.names();
+            for (int i = 0; names != null && i < names.length(); i++) {
+                String id = names.getString(i);
+                JSONArray rs = o.getJSONArray(id);
+                List<long[]> list = new ArrayList<>();
+                for (int j = 0; j < rs.length(); j++) {
+                    JSONArray r = rs.getJSONArray(j);
+                    list.add(new long[]{r.getLong(0), r.getLong(1)});
+                }
+                ranges.put(id, list);
+            }
+        } catch (JSONException ignored) {
+        }
+    }
+
+    /** Playback failed: try the current item again. */
+    public void retry() {
+        lastError = null;
+        player.prepare();
+        player.play();
+        notifyChange();
+    }
+
+    private static String errorKind(PlaybackException e) {
+        switch (e.errorCode) {
+            case PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED:
+            case PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT:
+                return "network";
+            case PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS:
+            case PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND:
+            case PlaybackException.ERROR_CODE_IO_INVALID_HTTP_CONTENT_TYPE:
+            case PlaybackException.ERROR_CODE_IO_NO_PERMISSION:
+                return "unavailable";
+            case PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED:
+            case PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED:
+            case PlaybackException.ERROR_CODE_DECODER_INIT_FAILED:
+            case PlaybackException.ERROR_CODE_DECODING_FAILED:
+            case PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED:
+            case PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED:
+                return "unsupported";
+            default:
+                return "unknown";
+        }
+    }
+
     /** Persist the playlist + position so a headset/Bluetooth play can restart it after the process died. */
     private void persistResume() {
         int n = player.getMediaItemCount();
@@ -264,7 +450,9 @@ public final class AudioController {
                         .put("title", m.title == null ? "" : m.title.toString())
                         .put("artist", m.artist == null ? "" : m.artist.toString())
                         .put("artwork", m.artworkUri == null ? "" : m.artworkUri.toString())
-                        .put("speed", m.extras == null ? 1.0 : m.extras.getFloat("speed", 1f)));
+                        .put("speed", m.extras == null ? 1.0 : m.extras.getFloat("speed", 1f))
+                        .put("introMs", m.extras == null ? 0 : m.extras.getLong("introMs", 0))
+                        .put("outroMs", m.extras == null ? 0 : m.extras.getLong("outroMs", 0)));
             }
             prefs.edit().putString(KEY_RESUME, new JSONObject()
                     .put("items", items)
@@ -348,6 +536,8 @@ public final class AudioController {
         if (!art.isEmpty() && art.startsWith("http")) meta.setArtworkUri(Uri.parse(art));
         Bundle extras = new Bundle();
         extras.putFloat("speed", (float) o.optDouble("speed", 1.0));
+        extras.putLong("introMs", o.optLong("introMs", 0));
+        extras.putLong("outroMs", o.optLong("outroMs", 0));
         meta.setExtras(extras);
         return new MediaItem.Builder()
                 .setMediaId(o.getString("id"))
@@ -363,6 +553,7 @@ public final class AudioController {
         items.add(buildItem(current));
         items.addAll(upNext);
         sleepEndOfEpisode = false;
+        lastError = null;
         player.setPauseAtEndOfMediaItems(false);
         lastId = current.getString("id");
         player.setMediaItems(items, 0, Math.max(startMs, 0));
@@ -416,6 +607,8 @@ public final class AudioController {
             o.put("durationMs", dur == C.TIME_UNSET ? 0 : dur);
             o.put("speed", player.getPlaybackParameters().speed);
             o.put("sleepEndsAt", sleepEndsAt);
+            o.put("error", lastError == null ? JSONObject.NULL : lastError);
+            o.put("skipAdChapters", skipAdChapters);
             o.put("sleepEndOfEpisode", sleepEndOfEpisode);
         } catch (JSONException ignored) {
         }

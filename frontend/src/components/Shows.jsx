@@ -15,6 +15,17 @@ export default function Shows({ shows, onPlay, queueIds, onToggleQueue, onPlayNe
   const [hidePlayed, setHidePlayed] = useState(false)
   const [query, setQuery] = useState('')
   const [oldestFirst, setOldestFirst] = useState(false)
+  const [skips, setSkips] = useState({ intro: 0, outro: 0 })
+
+  useEffect(() => {
+    if (selected) api.getShowSkips(selected.id).then(setSkips).catch(() => {})
+  }, [selected])
+
+  function changeSkip(which, value) {
+    const next = { ...skips, [which]: Number(value) }
+    setSkips(next)
+    api.setShowSkips(selected.id, next).catch(() => {})
+  }
 
   // On native there is no backend /api/opml: build the file on-device
   // instead and tell the user where it landed.
@@ -168,13 +179,35 @@ export default function Shows({ shows, onPlay, queueIds, onToggleQueue, onPlayNe
             {hidePlayed ? 'Showing unplayed' : 'Hide played'}
           </button>
         </div>
-                <label className="setting-row">
+        <label className="setting-row">
           <span>
             Auto-download new episodes
             <small>On Wi-Fi only. Deleted after you finish them.</small>
           </span>
           <input type="checkbox" checked={Boolean(selected.auto_download)} onChange={toggleAutoDownload} />
         </label>
+        <div className="setting-row">
+          <span>
+            Skip intro
+            <small>Start each new episode this far in.</small>
+          </span>
+          <select value={skips.intro} onChange={(e) => changeSkip('intro', e.target.value)}>
+            {[0, 10, 15, 30, 45, 60, 90, 120].map((v) => (
+              <option key={v} value={v}>{v === 0 ? 'Off' : `${v} s`}</option>
+            ))}
+          </select>
+        </div>
+        <div className="setting-row">
+          <span>
+            Skip outro
+            <small>Move on this long before the end.</small>
+          </span>
+          <select value={skips.outro} onChange={(e) => changeSkip('outro', e.target.value)}>
+            {[0, 10, 15, 30, 45, 60, 90, 120].map((v) => (
+              <option key={v} value={v}>{v === 0 ? 'Off' : `${v} s`}</option>
+            ))}
+          </select>
+        </div>
         <div className="toolbar" style={{ marginTop: 8 }}>
           <button className="pill" onClick={markAllPlayed} disabled={loading}>
             Mark all played

@@ -48,6 +48,16 @@ public class NativeAudioPlugin extends Plugin {
                 o.put("message", message);
                 notifyListeners("error", o);
             }
+
+            @Override
+            public void onAdSkipped(String id, long startMs, long endMs) {
+                JSObject o = new JSObject();
+                o.put("id", id);
+                o.put("startMs", startMs);
+                o.put("endMs", endMs);
+                o.put("at", System.currentTimeMillis());
+                notifyListeners("adSkipped", o);
+            }
         });
     }
 
@@ -159,6 +169,22 @@ public class NativeAudioPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void setSkipRanges(PluginCall call) {
+        onMain(call, () -> {
+            controller.setSkipRanges(call.getString("id"), call.getArray("ranges"));
+            call.resolve();
+        });
+    }
+
+    @PluginMethod
+    public void retry(PluginCall call) {
+        onMain(call, () -> {
+            controller.retry();
+            call.resolve();
+        });
+    }
+
+    @PluginMethod
     public void getOptions(PluginCall call) {
         onMain(call, () -> call.resolve(JSObject.fromJSONObject(controller.options())));
     }
@@ -166,7 +192,9 @@ public class NativeAudioPlugin extends Plugin {
     @PluginMethod
     public void setOptions(PluginCall call) {
         onMain(call, () -> {
-            controller.setOptions(call.getBoolean("skipSilence", false), call.getBoolean("boost", false));
+            controller.setOptions(call.getBoolean("skipSilence", false), call.getBoolean("boost", false),
+                    call.getInt("skipBackSec", 15), call.getInt("skipForwardSec", 30),
+                    call.getInt("skipAheadSec", 60), call.getBoolean("skipAdChapters", false));
             call.resolve(JSObject.fromJSONObject(controller.options()));
         });
     }

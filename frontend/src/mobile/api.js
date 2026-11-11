@@ -207,6 +207,19 @@ export const mobileApi = {
     return (show && show.playback_speed) || 1
   },
 
+  /** Per-show intro/outro skipping, in seconds (0 = off). */
+  async getShowSkips(showId) {
+    const show = await store.getShow(showId)
+    return { intro: (show && show.skip_intro) || 0, outro: (show && show.skip_outro) || 0 }
+  },
+
+  async setShowSkips(showId, { intro, outro }) {
+    const show = await store.getShow(showId)
+    if (!show) throw new Error('show not found')
+    await store.putShow({ ...show, skip_intro: Number(intro) || 0, skip_outro: Number(outro) || 0 })
+    return { intro: Number(intro) || 0, outro: Number(outro) || 0 }
+  },
+
   async setPlaybackSpeed(showId, speed) {
     const show = await store.getShow(showId)
     if (!show) return { playback_speed: speed }
@@ -431,7 +444,13 @@ export const mobileApi = {
       app: 'podcast-app',
       version: 1,
       created_at: new Date().toISOString(),
-      shows: shows.map((s) => ({ feed_url: s.feed_url, auto_download: Boolean(s.auto_download) })),
+      shows: shows.map((s) => ({
+        feed_url: s.feed_url,
+        auto_download: Boolean(s.auto_download),
+        playback_speed: s.playback_speed || null,
+        skip_intro: s.skip_intro || 0,
+        skip_outro: s.skip_outro || 0,
+      })),
       positions,
       queue: await store.getQueueOrder(),
     }
@@ -459,6 +478,10 @@ export const mobileApi = {
       try {
         const show = await this.subscribe(s.feed_url)
         if (s.auto_download) await this.setAutoDownload(show.id, true)
+        if (s.playback_speed) await this.setPlaybackSpeed(show.id, s.playback_speed)
+        if (s.skip_intro || s.skip_outro) {
+          await this.setShowSkips(show.id, { intro: s.skip_intro, outro: s.skip_outro })
+        }
       } catch {
         failed.push(s.feed_url)
       }

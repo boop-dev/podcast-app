@@ -70,6 +70,27 @@ public class PlaybackService extends MediaSessionService {
             public boolean isCommandAvailable(int command) {
                 return getAvailableCommands().contains(command);
             }
+
+            // The skip amounts are user settings, so seeks go through the controller.
+            @Override
+            public void seekBack() {
+                controller.seekBackConfigured();
+            }
+
+            @Override
+            public void seekForward() {
+                controller.seekForwardConfigured();
+            }
+
+            @Override
+            public long getSeekBackIncrement() {
+                return controller.skipBackMs();
+            }
+
+            @Override
+            public long getSeekForwardIncrement() {
+                return controller.skipForwardMs();
+            }
         };
 
         CommandButton back = new CommandButton.Builder()
@@ -127,8 +148,8 @@ public class PlaybackService extends MediaSessionService {
                     @Override
                     public ListenableFuture<SessionResult> onCustomCommand(MediaSession s, MediaSession.ControllerInfo controllerInfo,
                                                                           SessionCommand command, Bundle args) {
-                        if (SEEK_BACK.customAction.equals(command.customAction)) controller.player.seekBack();
-                        else if (SEEK_FORWARD.customAction.equals(command.customAction)) controller.player.seekForward();
+                        if (SEEK_BACK.customAction.equals(command.customAction)) controller.seekBackConfigured();
+                        else if (SEEK_FORWARD.customAction.equals(command.customAction)) controller.seekForwardConfigured();
                         return Futures.immediateFuture(new SessionResult(SessionResult.RESULT_SUCCESS));
                     }
                 })

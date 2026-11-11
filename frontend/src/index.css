@@ -433,3 +433,33 @@ button.link { color: var(--accent); text-decoration: underline; font: inherit; }
   border-radius: 999px; background: var(--surface-2); font-weight: 600; font-size: 0.84rem;
 }
 .queue-menu button.danger { color: #e5484d; }
+
+/* ---------- buffering, errors, ad toast ---------- */
+
+.spinner {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 3px solid currentColor; border-right-color: transparent;
+  animation: spin 0.8s linear infinite; display: inline-block;
+}
+.spinner.big { width: 34px; height: 34px; border-width: 4px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.mini-error { color: #e5484d; }
+
+.player-error {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin: 0 0 14px; padding: 12px 14px; border-radius: 12px;
+  background: var(--danger-bg); border: 1px solid var(--danger-border); color: var(--danger-ink);
+  font-size: 0.9rem; text-align: left;
+}
+
+.ad-toast {
+  position: fixed; left: 12px; right: 12px;
+  bottom: calc(var(--nav-h) + var(--mini-h) + 18px + env(safe-area-inset-bottom));
+  max-width: 440px; margin: 0 auto; z-index: 25;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 10px 10px 16px; border-radius: 999px;
+  background: var(--ink); color: var(--bg); font-weight: 600; font-size: 0.9rem;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+.ad-toast button { color: var(--accent); background: var(--surface); padding: 6px 14px; border-radius: 999px; font-weight: 700; }

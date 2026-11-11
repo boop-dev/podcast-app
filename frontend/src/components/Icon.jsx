@@ -30,18 +30,20 @@ const PATHS = {
       <rect x="14" y="4.5" width="4" height="15" rx="1" fill="currentColor" stroke="none" />
     </>
   ),
-  back15: (
+  back15: (label = 15) => (
     <>
       <path d="M4 12a8 8 0 1 0 2.5-5.8M4 4v4h4" />
-      <text x="12" y="15.5" fontSize="7.5" textAnchor="middle" fill="currentColor" stroke="none" fontWeight="700">15</text>
+      <text x="12" y="15.5" fontSize={String(label).length > 2 ? 6 : 7.5} textAnchor="middle" fill="currentColor" stroke="none" fontWeight="700">{label}</text>
     </>
   ),
-  fwd30: (
+  fwd30: (label = 30) => (
     <>
       <path d="M20 12a8 8 0 1 1-2.5-5.8M20 4v4h-4" />
-      <text x="12" y="15.5" fontSize="7.5" textAnchor="middle" fill="currentColor" stroke="none" fontWeight="700">30</text>
+      <text x="12" y="15.5" fontSize={String(label).length > 2 ? 6 : 7.5} textAnchor="middle" fill="currentColor" stroke="none" fontWeight="700">{label}</text>
     </>
   ),
+  retry: <path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v5h-5" />,
+  skipAhead: <path d="M5 5l7 7-7 7M13 5l7 7-7 7" />,
   download: <path d="M12 4v11M7 11l5 5 5-5M5 20h14" />,
   downloaded: (
     <>
@@ -75,7 +77,7 @@ const PATHS = {
   trash: <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" />,
 }
 
-export default function Icon({ name, size = 22, className = '' }) {
+export default function Icon({ name, size = 22, className = '', label }) {
   return (
     <svg
       className={`icon ${className}`}
@@ -89,7 +91,7 @@ export default function Icon({ name, size = 22, className = '' }) {
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      {PATHS[name]}
+      {typeof PATHS[name] === 'function' ? PATHS[name](label) : PATHS[name]}
     </svg>
   )
 }
