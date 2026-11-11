@@ -23,8 +23,10 @@
   color-scheme: light;
 }
 
+/* Dark follows the system unless the user forced light (data-theme="light"),
+   and is also used when they forced dark. See src/lib/theme.js. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #13100d;
     --surface: #1d1914;
     --surface-2: #2b251f;
@@ -42,6 +44,25 @@
     --new-ink: #04201c;
     color-scheme: dark;
   }
+}
+
+:root[data-theme="dark"] {
+  --bg: #13100d;
+  --surface: #1d1914;
+  --surface-2: #2b251f;
+  --ink: #f6efe6;
+  --muted: #a59a8d;
+  --border: #302a23;
+  --accent: #ff8a4c;
+  --accent-ink: #1c0e05;
+  --accent-soft: #3d2616;
+  --danger-bg: #3a1713;
+  --danger-border: #6b2a22;
+  --danger-ink: #ffd2c8;
+  --danger: #f0555f;
+  --new: #2dd4bf;
+  --new-ink: #04201c;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -348,6 +369,13 @@ h2.section { font-size: 0.95rem; font-weight: 700; margin: 22px 0 10px; }
   background: var(--surface-2);
   font-weight: 600; font-size: 0.9rem;
 }
+.chip.on { background: var(--accent-soft); color: var(--accent); }
+.speed-panel { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
+.speed-fine { display: flex; align-items: center; gap: 8px; }
+.speed-fine input[type="range"] { flex: 1; accent-color: var(--accent); }
+.speed-fine .icon-btn { font-size: 1.5rem; font-weight: 600; }
+.speed-presets { display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; }
+.speed-presets .chip { padding: 6px 12px; font-size: 0.82rem; }
 .select-chip select {
   font: inherit; font-weight: 600; color: inherit;
   background: transparent; border: 0; appearance: none; -webkit-appearance: none;

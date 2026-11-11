@@ -10,6 +10,39 @@ import { ChapterList, ShowNotes, currentChapter } from './PlayerPanels'
 import { formatDuration } from './EpisodeRow'
 
 export const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2, 2.5]
+export const SPEED_MIN = 0.5
+export const SPEED_MAX = 3
+export const SPEED_STEP = 0.05
+
+const clampSpeed = (v) =>
+  Math.min(SPEED_MAX, Math.max(SPEED_MIN, Math.round(v / SPEED_STEP) * SPEED_STEP))
+
+/** Fine speed control: slider and -/+ in 0.05x steps, plus the usual presets. */
+function SpeedPanel({ speed, onChange }) {
+  const set = (v) => onChange(Number(clampSpeed(v).toFixed(2)))
+  return (
+    <div className="speed-panel">
+      <div className="speed-fine">
+        <button className="icon-btn" onClick={() => set(speed - SPEED_STEP)} aria-label="Slower">−</button>
+        <input
+          type="range"
+          min={SPEED_MIN}
+          max={SPEED_MAX}
+          step={SPEED_STEP}
+          value={speed}
+          onChange={(e) => set(Number(e.target.value))}
+          aria-label="Playback speed"
+        />
+        <button className="icon-btn" onClick={() => set(speed + SPEED_STEP)} aria-label="Faster">+</button>
+      </div>
+      <div className="speed-presets">
+        {SPEEDS.map((s) => (
+          <button key={s} className={`chip${s === speed ? ' on' : ''}`} onClick={() => set(s)}>{s}×</button>
+        ))}
+      </div>
+    </div>
+  )
+}
 export const SLEEP_OPTIONS = [
   { label: 'Off', value: '0' },
   { label: '5 min', value: '5' },
@@ -40,7 +73,7 @@ export default function PlayerView({
   onToggle,
   onSkip,
   onSeek,
-  onCycleSpeed,
+  onSetSpeed,
   onSleepChange,
   chapters = [],
   description = null,
@@ -57,6 +90,7 @@ export default function PlayerView({
 }) {
   const [expanded, setExpanded] = useState(false)
   const [panel, setPanel] = useState(null) // null | 'chapters' | 'notes'
+  const [showSpeed, setShowSpeed] = useState(false)
   useBackHandler(expanded, () => setExpanded(false))
 
   if (!episode) return null
@@ -170,7 +204,7 @@ export default function PlayerView({
                 <Icon name="skipAhead" size={16} /> {formatDuration(skipAhead)}
               </button>
             )}
-            <button className="chip" onClick={onCycleSpeed} title="Playback speed">
+            <button className={`chip${showSpeed ? ' on' : ''}`} onClick={() => setShowSpeed((v) => !v)} title="Playback speed">
               {speed}×
             </button>
             <Picker
@@ -187,6 +221,8 @@ export default function PlayerView({
               )}
             </Picker>
           </div>
+
+          {showSpeed && <SpeedPanel speed={speed} onChange={onSetSpeed} />}
 
           <div className="panel-tabs">
             {showChapters && (

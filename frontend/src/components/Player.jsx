@@ -10,7 +10,7 @@ import { api } from '../api'
 import { NativeAudio, applyDrain, toItem } from '../lib/nativeAudio'
 import { adRanges } from '../lib/adChapters'
 import { shareEpisode } from '../lib/share'
-import PlayerView, { SPEEDS } from './PlayerView'
+import PlayerView from './PlayerView'
 
 const ERROR_TEXT = {
   network: "Can't reach the server. Check your connection.",
@@ -246,8 +246,7 @@ export default function Player({ nowPlaying, queue, onNativeChange, onQueueChang
         NativeAudio.seekTo({ positionMs: Math.round(t * 1000) })
         patch({ positionMs: Math.round(t * 1000) })
       }}
-      onCycleSpeed={() => {
-        const next = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length]
+      onSetSpeed={(next) => {
         NativeAudio.setSpeed({ speed: next })
         patch({ speed: next })
         if (episode) api.setPlaybackSpeed(episode.show_id, next).catch(() => {}) // remembered per show

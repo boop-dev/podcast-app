@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.KeyEvent;
 
 import androidx.annotation.Nullable;
 import androidx.media3.common.ForwardingPlayer;
@@ -34,6 +35,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 public class PlaybackService extends MediaSessionService {
     private static final SessionCommand SEEK_BACK = new SessionCommand("podcast.seek_back", Bundle.EMPTY);
     private static final SessionCommand SEEK_FORWARD = new SessionCommand("podcast.seek_forward", Bundle.EMPTY);
+    private static final SessionCommand SKIP_AHEAD = new SessionCommand("podcast.skip_ahead", Bundle.EMPTY);
 
     // A paused player stays a foreground service (so Android does not kill the
     // idle service, and with it the notification and lock-screen controls) for
@@ -104,6 +106,12 @@ public class PlaybackService extends MediaSessionService {
                 .setSessionCommand(SEEK_FORWARD)
                 .build();
 
+        CommandButton ahead = new CommandButton.Builder()
+                .setDisplayName("Skip ahead")
+                .setIconResId(R.drawable.ic_skip_ahead)
+                .setSessionCommand(SKIP_AHEAD)
+                .build();
+
         PendingIntent open = PendingIntent.getActivity(
                 this, 0, new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
@@ -118,13 +126,25 @@ public class PlaybackService extends MediaSessionService {
 
         session = new MediaSession.Builder(this, player)
                 .setSessionActivity(open)
-                .setCustomLayout(ImmutableList.of(back, forward))
+                .setCustomLayout(ImmutableList.of(back, forward, ahead))
                 .setCallback(new MediaSession.Callback() {
                     @Override
                     public MediaSession.ConnectionResult onConnect(MediaSession s, MediaSession.ControllerInfo controllerInfo) {
                         SessionCommands commands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
-                                .add(SEEK_BACK).add(SEEK_FORWARD).build();
+                                .add(SEEK_BACK).add(SEEK_FORWARD).add(SKIP_AHEAD).build();
                         return MediaSession.ConnectionResult.accept(commands, MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS);
+                    }
+
+                    // Headset gesture: a double-press sends "next" (and some remotes send
+                    // fast-forward). Next is hidden for podcasts, so use it as the long skip.
+                    @Override
+                    public boolean onMediaButtonEvent(MediaSession s, MediaSession.ControllerInfo controllerInfo, Intent intent) {
+                        KeyEvent key = intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT);
+                        if (key == null) return false;
+                        int code = key.getKeyCode();
+                        if (code != KeyEvent.KEYCODE_MEDIA_NEXT && code != KeyEvent.KEYCODE_MEDIA_FAST_FORWARD) return false;
+                        if (key.getAction() == KeyEvent.ACTION_DOWN && key.getRepeatCount() == 0) controller.seekAheadConfigured();
+                        return true; // swallow the up event too
                     }
 
                     // A headset / Bluetooth / notification play arriving when the player is empty
@@ -150,6 +170,7 @@ public class PlaybackService extends MediaSessionService {
                                                                           SessionCommand command, Bundle args) {
                         if (SEEK_BACK.customAction.equals(command.customAction)) controller.seekBackConfigured();
                         else if (SEEK_FORWARD.customAction.equals(command.customAction)) controller.seekForwardConfigured();
+                        else if (SKIP_AHEAD.customAction.equals(command.customAction)) controller.seekAheadConfigured();
                         return Futures.immediateFuture(new SessionResult(SessionResult.RESULT_SUCCESS));
                     }
                 })

@@ -49,7 +49,7 @@ Effort: **S** under an hour, **M** a session, **L** a multi-step project.
 
 - [x] Custom launcher icon (adaptive + legacy, round) — S
 - [x] Custom splash screen — S
-- [ ] Manual light / dark / system theme setting — S
+- [x] Manual light / dark / system theme setting — S
 
 ## Ad skipping
 
@@ -59,7 +59,7 @@ timestamps do not line up. The plan is to start with cheap, reliable helpers
 and decide on detection only after a feasibility spike.
 
 - [x] Configurable skip back / forward and a long-skip button in the player — S
-- [ ] Long-skip in the notification or as a headset gesture — S
+- [x] Long-skip in the notification or as a headset gesture — S
 - [x] Per-show skip intro / outro seconds — S
 - [x] Auto-skip chapters titled "Ad" / "Sponsor" when a feed marks them (opt-in) — S
 - [ ] Manual "mark ad" while listening: remember skip ranges per episode — M
@@ -69,8 +69,8 @@ and decide on detection only after a feasibility spike.
 
 ## Listening
 
-- [ ] Sleep timer: shake to extend, fade-out before pausing — S
-- [ ] Finer speed control (0.05x steps) — S
+- [x] Sleep timer: shake to extend, fade-out before pausing — S
+- [x] Finer speed control (0.05x steps) — S
 - [x] Buffering and error states in the player (spinner, message, retry) — S
 - [x] Chapter artwork in the player — S
 - [ ] Current chapter in the lock-screen / notification card — M
@@ -95,7 +95,7 @@ and decide on detection only after a feasibility spike.
 ## Alerts and backup
 
 - [ ] Notification actions: Play / Add to queue — M
-- [ ] Alert check covers more than the newest 12 items — S
+- [x] Alert check covers more than the newest 12 items — S
 - [ ] Scheduled automatic backups to a cloud folder — M
 
 ## Platform

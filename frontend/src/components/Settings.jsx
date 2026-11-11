@@ -9,6 +9,7 @@ import {
   clearQueued, enforceCap, getCapGb, removeJob, retryJob, setCapGb, useDownloads,
 } from '../lib/downloadManager'
 import { CAP_OPTIONS_GB } from '../lib/storageCap'
+import { getTheme, setTheme } from '../lib/theme'
 import Picker from './Picker'
 
 function formatBytes(n) {
@@ -27,11 +28,17 @@ export default function Settings({ onChanged }) {
     skipForwardSec: 30,
     skipAheadSec: 60,
     skipAdChapters: false,
+    sleepShake: true,
   })
   const [watch, setWatch] = useState({ enabled: false, intervalHours: 3 })
   const jobs = useDownloads()
   const [capGb, setCap] = useState(0)
   const [appInfo, setAppInfo] = useState(null)
+  const [theme, setThemeState] = useState(getTheme)
+  const changeTheme = (value) => {
+    setThemeState(value)
+    setTheme(value)
+  }
 
   useEffect(() => {
     CapApp.getInfo().then(setAppInfo).catch(() => {})
@@ -149,6 +156,13 @@ export default function Settings({ onChanged }) {
 
   return (
     <div>
+      <h2 className="section">Appearance</h2>
+      <div className="setting-row">
+        <span>Theme</span>
+        <Picker title="Theme" value={theme} onChange={changeTheme}
+          options={[{ value: 'system', label: 'System' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }]} />
+      </div>
+
       <h2 className="section">Playback</h2>
       <label className="setting-row">
         <span>
@@ -165,6 +179,13 @@ export default function Settings({ onChanged }) {
         <input type="checkbox" checked={options.boost} onChange={() => changeOption('boost')} />
       </label>
 
+      <label className="setting-row">
+        <span>
+          Shake to extend sleep timer
+          <small>Shake in the last minute to add 5 minutes. The volume also fades out before it pauses.</small>
+        </span>
+        <input type="checkbox" checked={options.sleepShake} onChange={() => changeOption('sleepShake')} />
+      </label>
       <label className="setting-row">
         <span>
           Skip ad chapters

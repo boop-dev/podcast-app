@@ -194,7 +194,8 @@ public class NativeAudioPlugin extends Plugin {
         onMain(call, () -> {
             controller.setOptions(call.getBoolean("skipSilence", false), call.getBoolean("boost", false),
                     call.getInt("skipBackSec", 15), call.getInt("skipForwardSec", 30),
-                    call.getInt("skipAheadSec", 60), call.getBoolean("skipAdChapters", false));
+                    call.getInt("skipAheadSec", 60), call.getBoolean("skipAdChapters", false),
+                    call.getBoolean("sleepShake", true));
             call.resolve(JSObject.fromJSONObject(controller.options()));
         });
     }

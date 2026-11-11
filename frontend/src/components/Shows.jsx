@@ -187,7 +187,9 @@ export default function Shows({ shows, onPlay, queueIds, onToggleQueue, onPlayNe
 
   if (selected) {
     const unplayedCount = counts.unplayed
+    // A fine-tuned speed set from the player (e.g. 1.35) must still show as the current value.
     const speedOptions = [0.75, 1, 1.25, 1.5, 1.75, 2, 2.5]
+    if (!speedOptions.includes(speed)) speedOptions.push(speed), speedOptions.sort((a, b) => a - b)
     const secondsOptions = [0, 10, 15, 30, 45, 60, 90, 120]
     const downloadable = episodes.filter((ep) => !ep.completed && !downloadedIds.has(ep.id)).length
     return (

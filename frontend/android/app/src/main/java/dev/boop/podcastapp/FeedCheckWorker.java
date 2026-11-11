@@ -40,7 +40,10 @@ public class FeedCheckWorker extends Worker {
     static final String KEY_CONFIG = "config";   // {enabled, intervalHours, feeds:[{id,title,url,known:[]}]}
     static final String KEY_ALERTS = "alerts";   // new episodes found since JS last looked
     static final String CHANNEL = "new_episodes";
-    private static final int ITEMS_TO_CHECK = 12;
+    /** Hard ceiling on items read per feed, so a huge back catalogue cannot stall the worker. */
+    private static final int ITEMS_TO_CHECK = 300;
+    /** Feeds list newest first: after this many already-known items in a row, the rest are old. */
+    private static final int KNOWN_RUN_TO_STOP = 3;
     private static final int MAX_KNOWN = 120;
 
     public FeedCheckWorker(@NonNull Context context, @NonNull WorkerParameters params) {
@@ -84,7 +87,7 @@ public class FeedCheckWorker extends Worker {
         Set<String> known = new HashSet<>();
         for (int i = 0; i < knownArr.length(); i++) known.add(knownArr.getString(i));
 
-        List<String[]> items = fetchItems(feed.getString("url")); // {guid, title}
+        List<String[]> items = fetchItems(feed.getString("url"), known); // {guid, title}
         List<String[]> fresh = new ArrayList<>();
         for (String[] item : items) if (!known.contains(item[0])) fresh.add(item);
         if (fresh.isEmpty()) return 0;
@@ -123,8 +126,12 @@ public class FeedCheckWorker extends Worker {
         }
     }
 
-    /** Stream a feed and return the newest items as {guid, title}. */
-    static List<String[]> fetchItems(String urlString) throws Exception {
+    /**
+     * Stream a feed and return its items as {guid, title}, newest first. Reading stops
+     * once a run of already-known items shows we have caught up, so a burst of new
+     * episodes is fully counted without parsing the whole archive.
+     */
+    static List<String[]> fetchItems(String urlString, Set<String> known) throws Exception {
         HttpURLConnection conn = null;
         String current = urlString;
         for (int hop = 0; hop < 6; hop++) { // follow http<->https redirects ourselves
@@ -148,8 +155,9 @@ public class FeedCheckWorker extends Worker {
             p.setInput(in, null);
             boolean inItem = false;
             String guid = null, link = null, title = null, enclosure = null;
+            int knownRun = 0;
             int event = p.getEventType();
-            while (event != XmlPullParser.END_DOCUMENT && items.size() < ITEMS_TO_CHECK) {
+            while (event != XmlPullParser.END_DOCUMENT && items.size() < ITEMS_TO_CHECK && knownRun < KNOWN_RUN_TO_STOP) {
                 if (event == XmlPullParser.START_TAG) {
                     String name = p.getName();
                     if (name.equals("item") || name.equals("entry")) {
@@ -169,7 +177,10 @@ public class FeedCheckWorker extends Worker {
                 } else if (event == XmlPullParser.END_TAG && (p.getName().equals("item") || p.getName().equals("entry"))) {
                     inItem = false;
                     String id = firstNonEmpty(guid, link, enclosure); // same fallback order as the JS parser
-                    if (id != null) items.add(new String[]{id, title == null || title.isEmpty() ? "New episode" : title});
+                    if (id != null) {
+                        items.add(new String[]{id, title == null || title.isEmpty() ? "New episode" : title});
+                        knownRun = known.contains(id) ? knownRun + 1 : 0;
+                    }
                 }
                 event = p.next();
             }

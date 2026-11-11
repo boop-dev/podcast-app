@@ -2,6 +2,10 @@ package dev.boop.podcastapp;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.media.audiofx.LoudnessEnhancer;
 import android.net.Uri;
 import android.os.Bundle;
@@ -68,6 +72,11 @@ public final class AudioController {
     private static final long TICK_INTERVAL_MS = 500;
     private static final int MAX_RANGE_EPISODES = 30;
     private static final int BOOST_GAIN_MB = 600; // +6 dB for quiet voices
+    private static final String KEY_SLEEP_SHAKE = "opt_sleep_shake";
+    private static final long SLEEP_FADE_MS = 20_000;     // volume ramps down over the last 20 s
+    private static final long SHAKE_WINDOW_MS = 60_000;   // a shake only counts in the last minute
+    private static final long SLEEP_EXTEND_MS = 5 * 60_000L;
+    private static final double SHAKE_THRESHOLD_G = 2.6;
 
     private static AudioController instance;
 
@@ -79,7 +88,10 @@ public final class AudioController {
     }
 
     public final ExoPlayer player;
+    private final Context appContext;
     private final SharedPreferences prefs;
+    private boolean sleepShake = true;
+    private boolean shaking = false;
     private final Handler main = new Handler(Looper.getMainLooper());
 
     private JSONObject dirty = new JSONObject();      // id -> {positionMs, durationMs, completed}
@@ -99,12 +111,50 @@ public final class AudioController {
     private boolean sleepEndOfEpisode = false;
     @Nullable private Listener listener;
 
+    // Timed sleep timer: ticks once a second, fades the volume out over the last
+    // SLEEP_FADE_MS, listens for a shake in the last SHAKE_WINDOW_MS, then pauses.
     private final Runnable sleepRunnable = new Runnable() {
         @Override
         public void run() {
-            sleepEndsAt = 0;
-            player.pause();
-            notifyChange();
+            if (sleepEndsAt == 0) return;
+            long left = sleepEndsAt - System.currentTimeMillis();
+            if (left <= 0) {
+                sleepEndsAt = 0;
+                stopShakeDetection();
+                player.pause();
+                player.setVolume(1f); // restore for the next time the user presses play
+                notifyChange();
+                return;
+            }
+            if (left <= SHAKE_WINDOW_MS && sleepShake) startShakeDetection();
+            if (left <= SLEEP_FADE_MS) player.setVolume(Math.max(0.05f, (float) left / SLEEP_FADE_MS));
+            main.postDelayed(this, left > SLEEP_FADE_MS ? Math.min(1000, left - SLEEP_FADE_MS) : 250);
+        }
+    };
+
+    private final SensorEventListener shakeListener = new SensorEventListener() {
+        private long firstJoltAt = 0;
+        private long lastExtendAt = 0;
+
+        @Override
+        public void onSensorChanged(SensorEvent e) {
+            double g = Math.sqrt(e.values[0] * e.values[0] + e.values[1] * e.values[1] + e.values[2] * e.values[2])
+                    / SensorManager.GRAVITY_EARTH;
+            if (g < SHAKE_THRESHOLD_G) return;
+            long now = System.currentTimeMillis();
+            if (now - lastExtendAt < 1500) return;
+            if (now - firstJoltAt > 900) { // first jolt: wait for a second one so a single bump does nothing
+                firstJoltAt = now;
+                return;
+            }
+            if (now - firstJoltAt < 120) return; // same jolt seen twice
+            firstJoltAt = 0;
+            lastExtendAt = now;
+            extendSleep();
+        }
+
+        @Override
+        public void onAccuracyChanged(Sensor sensor, int accuracy) {
         }
     };
 
@@ -126,7 +176,8 @@ public final class AudioController {
     };
 
     private AudioController(Context context) {
-        prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        appContext = context;
+        prefs =context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         try {
             dirty = new JSONObject(prefs.getString(KEY_DIRTY, "{}"));
             consumed = new JSONArray(prefs.getString(KEY_CONSUMED, "[]"));
@@ -162,6 +213,7 @@ public final class AudioController {
         skipForwardSec = prefs.getInt(KEY_SKIP_FORWARD, 30);
         skipAheadSec = prefs.getInt(KEY_SKIP_AHEAD, 60);
         skipAdChapters = prefs.getBoolean(KEY_SKIP_ADS, false);
+        sleepShake = prefs.getBoolean(KEY_SLEEP_SHAKE, true);
         loadRanges();
         skipSilence = prefs.getBoolean(KEY_SKIP_SILENCE, false);
         boost = prefs.getBoolean(KEY_BOOST, false);
@@ -260,7 +312,10 @@ public final class AudioController {
         }
     }
 
-    public void setOptions(boolean skipSilence, boolean boost, int backSec, int forwardSec, int aheadSec, boolean skipAds) {
+    public void setOptions(boolean skipSilence, boolean boost, int backSec, int forwardSec, int aheadSec, boolean skipAds,
+                           boolean sleepShake) {
+        this.sleepShake = sleepShake;
+        if (!sleepShake) stopShakeDetection();
         this.skipSilence = skipSilence;
         this.boost = boost;
         this.skipBackSec = Math.max(1, backSec);
@@ -269,7 +324,8 @@ public final class AudioController {
         this.skipAdChapters = skipAds;
         prefs.edit().putBoolean(KEY_SKIP_SILENCE, skipSilence).putBoolean(KEY_BOOST, boost)
                 .putInt(KEY_SKIP_BACK, this.skipBackSec).putInt(KEY_SKIP_FORWARD, this.skipForwardSec)
-                .putInt(KEY_SKIP_AHEAD, this.skipAheadSec).putBoolean(KEY_SKIP_ADS, skipAds).apply();
+                .putInt(KEY_SKIP_AHEAD, this.skipAheadSec).putBoolean(KEY_SKIP_ADS, skipAds)
+                .putBoolean(KEY_SLEEP_SHAKE, sleepShake).apply();
         player.setSkipSilenceEnabled(skipSilence);
         applyBoost();
     }
@@ -283,6 +339,7 @@ public final class AudioController {
             o.put("skipForwardSec", skipForwardSec);
             o.put("skipAheadSec", skipAheadSec);
             o.put("skipAdChapters", skipAdChapters);
+            o.put("sleepShake", sleepShake);
         } catch (JSONException ignored) {
         }
         return o;
@@ -322,6 +379,14 @@ public final class AudioController {
 
     public void seekForwardConfigured() {
         player.seekTo(player.getCurrentPosition() + skipForwardMs());
+    }
+
+    /** The long jump (e.g. past an ad), from the notification or a headset double-press. */
+    public void seekAheadConfigured() {
+        long target = player.getCurrentPosition() + skipAheadSec * 1000L;
+        long dur = player.getDuration();
+        if (dur != C.TIME_UNSET) target = Math.min(target, dur);
+        player.seekTo(target);
     }
 
     /** Finish the current episode now: mark it played and move on (or end). */
@@ -573,6 +638,8 @@ public final class AudioController {
 
     public void setSleep(int minutes, boolean endOfEpisode) {
         main.removeCallbacks(sleepRunnable);
+        stopShakeDetection();
+        player.setVolume(1f); // cancelling mid-fade must bring the volume back
         sleepEndsAt = 0;
         sleepEndOfEpisode = false;
         player.setPauseAtEndOfMediaItems(false);
@@ -580,11 +647,36 @@ public final class AudioController {
             sleepEndOfEpisode = true;
             player.setPauseAtEndOfMediaItems(true);
         } else if (minutes > 0) {
-            long ms = minutes * 60_000L;
-            sleepEndsAt = System.currentTimeMillis() + ms;
-            main.postDelayed(sleepRunnable, ms);
+            sleepEndsAt = System.currentTimeMillis() + minutes * 60_000L;
+            main.post(sleepRunnable);
         }
         notifyChange();
+    }
+
+    /** Shake in the last minute of the timer: add more time and undo the fade. */
+    private void extendSleep() {
+        if (sleepEndsAt == 0) return;
+        sleepEndsAt += SLEEP_EXTEND_MS;
+        player.setVolume(1f);
+        stopShakeDetection(); // sleepRunnable re-arms it when the last minute comes round again
+        main.removeCallbacks(sleepRunnable);
+        main.post(sleepRunnable);
+        notifyChange();
+    }
+
+    private void startShakeDetection() {
+        if (shaking) return;
+        SensorManager sm = (SensorManager) appContext.getSystemService(Context.SENSOR_SERVICE);
+        Sensor accel = sm == null ? null : sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        if (accel == null) return; // no accelerometer: the timer just works without shake
+        shaking = sm.registerListener(shakeListener, accel, SensorManager.SENSOR_DELAY_UI);
+    }
+
+    private void stopShakeDetection() {
+        if (!shaking) return;
+        SensorManager sm = (SensorManager) appContext.getSystemService(Context.SENSOR_SERVICE);
+        if (sm != null) sm.unregisterListener(shakeListener);
+        shaking = false;
     }
 
     public JSONObject state() {
