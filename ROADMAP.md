@@ -107,9 +107,9 @@ and decide on detection only after a feasibility spike.
 
 ## Distribution and engineering
 
-- [ ] Signed release build (not a debug APK) — M
+- [x] Signed release build (not a debug APK) — M
 - [x] Human-readable versionName — S
-- [ ] GitHub Actions release builds + Obtainium updates — M
+- [ ] GitHub Actions release builds + Obtainium updates — M (workflow written in .github/workflows/release.yml; needs the four secrets from the README and a first tag to prove it)
 - [x] `.gitattributes` to stop line-ending noise — S
 - [ ] Automated UI / native tests — L
 

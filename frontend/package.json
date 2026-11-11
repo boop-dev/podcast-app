@@ -7,6 +7,7 @@
     "build": "vite build",
     "apk": "node scripts/apk.mjs",
     "install:phone": "node scripts/apk.mjs --install",
+    "release": "node scripts/apk.mjs --release",
     "verify": "node scripts/verify-mobile.mjs",
     "progress": "node scripts/progress.mjs"
   },

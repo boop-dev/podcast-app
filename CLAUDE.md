@@ -76,3 +76,8 @@ The owner uses wireless debugging, and the port changes every time it is toggled
 - ExoPlayer applies a metadata-only `replaceMediaItem` in place (used for the chapter title). The item carries a
   `refresh` extra so `onMediaItemTransition` ignores it.
 - `install:phone` kills the running app, so playback stops after each install.
+- `versionCode` is the git commit count. After committing, an older debug APK on disk is a "downgrade" and
+  `adb install -r` refuses it (`INSTALL_FAILED_VERSION_DOWNGRADE`): rebuild with `npm run install:phone`.
+- `npm run release` builds the signed release APK. A release build is not debuggable, so `run-as` stops working
+  on the phone: reinstall the debug build before testing again. Releases are cut by pushing a `vX.Y.Z` tag
+  (see `.github/workflows/release.yml` and the README "Releases" section).

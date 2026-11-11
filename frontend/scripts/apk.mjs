@@ -1,6 +1,8 @@
 // One-command APK build (and optional USB install).
 //   npm run apk            -> builds android/app/build/outputs/apk/debug/app-debug.apk
 //   npm run install:phone  -> builds, then installs over USB with adb (keeps app data)
+//   npm run release        -> builds the signed release APK (app-release.apk)
+//   add --install to either build to install it with adb afterwards
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
@@ -33,9 +35,18 @@ function run(cmd, args, opts = {}) {
 
 run('npx', ['vite', 'build'])
 run('npx', ['cap', 'sync', 'android'])
-run('"' + join(android, win ? 'gradlew.bat' : 'gradlew') + '"', ['assembleDebug'], { cwd: android })
+// --release builds the release variant, signed with the same key as debug (keystore.properties),
+// so it installs over any earlier build. Without that file Gradle produces an unsigned APK.
+const release = process.argv.includes('--release')
+if (release && !existsSync(join(android, 'keystore.properties'))) {
+  console.error('\nandroid/keystore.properties is missing: a release build would be unsigned. See README "Releases".')
+  process.exit(1)
+}
+run('"' + join(android, win ? 'gradlew.bat' : 'gradlew') + '"', [release ? 'assembleRelease' : 'assembleDebug'], { cwd: android })
 
-const apk = join(android, 'app/build/outputs/apk/debug/app-debug.apk')
+const apk = release
+  ? join(android, 'app/build/outputs/apk/release/app-release.apk')
+  : join(android, 'app/build/outputs/apk/debug/app-debug.apk')
 console.log(`\nAPK ready: ${apk}`)
 
 if (process.argv.includes('--install')) {

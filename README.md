@@ -41,6 +41,36 @@ npm run install:phone     # builds the APK and installs it with adb
 (`frontend/android/podcast-app.jks`, gitignored): keep it backed up, because
 an APK signed with a different key cannot be installed over this one.
 
+## Releases
+
+`npm run release` (in `frontend/`) builds the signed release APK at
+`frontend/android/app/build/outputs/apk/release/app-release.apk`. It uses the same key as the
+debug build, so it installs over an existing install and keeps your data. It refuses to run
+without `android/keystore.properties`.
+
+Pushing a tag runs `.github/workflows/release.yml`, which builds that APK and attaches it to a
+GitHub Release (so an updater such as Obtainium can follow the repository):
+
+1. Bump `version` in `frontend/package.json`, commit, push.
+2. `git tag v1.3.0 && git push origin v1.3.0` (the tag must equal `v` plus the version, or the
+   workflow stops).
+
+One-time setup, in the repo's Settings, Secrets and variables, Actions. Add four secrets from
+your local `frontend/android/keystore.properties`:
+
+| Secret | Value |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | the keystore file, base64: `base64 -w0 frontend/android/podcast-app.jks` |
+| `ANDROID_KEYSTORE_PASSWORD` | `storePassword` |
+| `ANDROID_KEY_ALIAS` | `keyAlias` |
+| `ANDROID_KEY_PASSWORD` | `keyPassword` |
+
+The keystore never goes in git. If the CI key differs from the one on your phone, Android will
+refuse the update, so use the same file you build with locally.
+
+In Obtainium, add `https://github.com/boop-dev/podcast-app` and it will install each new
+release's APK.
+
 ## Layout
 
 ```

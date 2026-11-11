@@ -1,0 +1,90 @@
+name: Release APK
+
+# Push a tag like v1.3.0 (it must match "version" in frontend/package.json) to build a signed
+# APK and attach it to a GitHub Release. Obtainium (or any updater) can follow that Release page.
+# Needs four repository secrets, see README "Releases".
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # versionCode is the commit count, which needs the full history
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Check the tag matches package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          want="v$(node -p "require('./package.json').version")"
+          if [ "$want" != "${GITHUB_REF_NAME}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match package.json version ($want). Bump the version first." >&2
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Restore the signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then echo "ANDROID_KEYSTORE_BASE64 secret is not set" >&2; exit 1; fi
+          echo "$KEYSTORE_BASE64" | base64 -d > android/podcast-app.jks
+          {
+            echo "storeFile=podcast-app.jks"
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > android/keystore.properties
+
+      - name: Build the web app and the signed APK
+        run: |
+          npx vite build
+          npx cap sync android
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease
+
+      - name: Name the APK
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          cp android/app/build/outputs/apk/release/app-release.apk "podcast-app-${version}.apk"
+          echo "APK_FILE=frontend/podcast-app-${version}.apk" >> "$GITHUB_ENV"
+
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.APK_FILE }}
+          generate_release_notes: true
+
+      - name: Keep the APK as a build artifact (manual runs)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: podcast-app-apk
+          path: ${{ env.APK_FILE }}
