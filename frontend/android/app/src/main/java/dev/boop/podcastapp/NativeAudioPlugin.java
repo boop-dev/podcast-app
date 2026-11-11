@@ -284,9 +284,11 @@ public class NativeAudioPlugin extends Plugin {
             o.put("queue", new org.json.JSONArray(p.getString(NotificationActionReceiver.KEY_PENDING_QUEUE, "[]")));
             String play = p.getString(NotificationActionReceiver.KEY_PENDING_PLAY, null);
             o.put("play", play == null ? org.json.JSONObject.NULL : new org.json.JSONObject(play));
+            o.put("share", p.getString(NotificationActionReceiver.KEY_PENDING_SHARE, null));
         } catch (Exception ignored) {
         }
-        p.edit().remove(NotificationActionReceiver.KEY_PENDING_QUEUE).remove(NotificationActionReceiver.KEY_PENDING_PLAY).apply();
+        p.edit().remove(NotificationActionReceiver.KEY_PENDING_QUEUE).remove(NotificationActionReceiver.KEY_PENDING_PLAY)
+                .remove(NotificationActionReceiver.KEY_PENDING_SHARE).apply();
         call.resolve(o);
     }
 

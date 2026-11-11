@@ -7,6 +7,7 @@ import { App as CapApp } from '@capacitor/app'
 import { syncAll } from './mobile/sync'
 import * as store from './mobile/store'
 import { episodeIdFor } from './mobile/store'
+import { parseSharedLink } from './lib/shareTarget'
 import { handleBack } from './lib/back'
 import { NativeAudio } from './lib/nativeAudio'
 import { refreshFeedWatchList } from './lib/feedWatch'
@@ -49,6 +50,12 @@ export default function App() {
   const [downloadedIds, setDownloadedIds] = useState(new Set())
   const [nowPlaying, setNowPlaying] = useState(null) // {episode, showTitle, autoplay}
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('') // a short status line, clears itself
+  useEffect(() => {
+    if (!notice) return undefined
+    const id = setTimeout(() => setNotice(''), 6000)
+    return () => clearTimeout(id)
+  }, [notice])
 
   const refreshShows = useCallback(() => {
     api
@@ -146,10 +153,36 @@ export default function App() {
     return () => clearTimeout(id)
   }, [shows])
 
+  // A link shared to the app: resolve it to a feed and subscribe.
+  async function applySharedLink(text) {
+    const link = parseSharedLink(text)
+    if (!link) {
+      setError('That shared text has no podcast link in it.')
+      return
+    }
+    if (link.kind === 'unsupported') {
+      setError(`${link.host} links do not include the podcast's feed. Share the show's Apple Podcasts link or its RSS URL instead.`)
+      return
+    }
+    setError('')
+    setNotice('Subscribing…')
+    try {
+      const feedUrl = link.kind === 'apple' ? await api.lookupFeedUrl(link.id) : link.url
+      const show = await api.subscribe(feedUrl)
+      refreshShows()
+      setView('shows')
+      setNotice(show._isNew ? `Subscribed to ${show.title}.` : `You already follow ${show.title}.`)
+    } catch (err) {
+      setNotice('')
+      setError(`Could not subscribe: ${err.message}`)
+    }
+  }
+
   // Buttons pressed on a new-episode notification: queue the episodes / play the newest.
   async function applyNotificationActions() {
     const act = await NativeAudio.consumePendingActions().catch(() => null)
     if (!act) return
+    if (act.share) await applySharedLink(act.share)
     for (const { showId, guid } of act.queue || []) {
       const ep = await api.getEpisode(episodeIdFor(showId, guid)).catch(() => null)
       if (ep) await api.addToQueue(ep.id).catch(() => {})
@@ -208,6 +241,7 @@ export default function App() {
       </header>
 
       {error && <div className="error">{error}</div>}
+      {notice && <div className="notice">{notice}</div>}
 
       {view === 'settings' && (
         <Settings

@@ -96,6 +96,14 @@ export const mobileApi = {
     return { results }
   },
 
+  /** The RSS feed URL behind an Apple Podcasts id (from a shared apple.com link). */
+  async lookupFeedUrl(appleId) {
+    const data = await httpGetJson('https://itunes.apple.com/lookup', { id: appleId, entity: 'podcast' })
+    const item = (data.results || []).find((r) => r.feedUrl)
+    if (!item) throw new Error('Apple has no feed for that podcast.')
+    return item.feedUrl
+  },
+
   async subscribe(feedUrl) {
     const url = (feedUrl || '').trim()
     if (!url) throw new Error('feedUrl is required')

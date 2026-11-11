@@ -48,8 +48,21 @@ public class MainActivity extends BridgeActivity {
         });
     }
 
+    /** A link shared to the app (Share sheet) or opened as a feed / Apple Podcasts link: keep it for JS. */
+    private void stashSharedLink(Intent intent) {
+        if (intent == null) return;
+        String text = null;
+        if (Intent.ACTION_SEND.equals(intent.getAction())) text = intent.getStringExtra(Intent.EXTRA_TEXT);
+        else if (Intent.ACTION_VIEW.equals(intent.getAction()) && intent.getData() != null) text = intent.getData().toString();
+        if (text == null || text.trim().isEmpty()) return;
+        getSharedPreferences(FeedCheckWorker.PREFS, Context.MODE_PRIVATE).edit()
+                .putString(NotificationActionReceiver.KEY_PENDING_SHARE, text).apply();
+        intent.setAction(null); // handled: not again on the next resume
+    }
+
     /** The "Play" button on a new-episode notification: keep the request for the JS side to pick up. */
     private void stashPlayRequest(Intent intent) {
+        stashSharedLink(intent);
         if (intent == null || intent.getStringExtra("play_guid") == null) return;
         try {
             getSharedPreferences(FeedCheckWorker.PREFS, Context.MODE_PRIVATE).edit()

@@ -102,7 +102,7 @@ and decide on detection only after a feasibility spike.
 
 - [ ] Home-screen widget — L
 - [ ] Android Auto — L
-- [ ] Share target for podcast links — M
+- [x] Share target for podcast links — M
 - [ ] Edge-to-edge insets and tablet layout — M
 
 ## Distribution and engineering

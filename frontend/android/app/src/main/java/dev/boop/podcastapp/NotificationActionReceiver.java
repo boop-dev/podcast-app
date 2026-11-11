@@ -15,6 +15,7 @@ public class NotificationActionReceiver extends BroadcastReceiver {
     static final String ACTION_QUEUE = "dev.boop.podcastapp.QUEUE_NEW";
     static final String KEY_PENDING_QUEUE = "pending_queue";
     static final String KEY_PENDING_PLAY = "pending_play";
+    static final String KEY_PENDING_SHARE = "pending_share"; // text/URL shared to the app, not yet handled
 
     @Override
     public void onReceive(Context ctx, Intent intent) {
