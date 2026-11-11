@@ -29,13 +29,16 @@ import * as store from './store.js'
 const ITUNES_SEARCH_URL = 'https://itunes.apple.com/search'
 
 async function withState(ep) {
-  const [pos, queueOrder, download] = await Promise.all([
+  const [pos, queueOrder, download, show] = await Promise.all([
     store.getPosition(ep.id),
     store.getQueueOrder(),
     store.getDownload(ep.id),
+    store.getShow(ep.show_id),
   ])
   return {
     ...ep,
+    show_title: show ? show.title : '',
+    show_image: show ? show.image_url : null,
     position_seconds: pos ? pos.position_seconds : 0,
     completed: pos ? Boolean(pos.completed) : false,
     is_new: Boolean(ep.is_new) && !(pos && pos.completed),
@@ -89,6 +92,11 @@ export const mobileApi = {
     await store.putEpisodes(fresh)
     const count = await store.countEpisodesForShow(show.id)
     return { ...show, episode_count: count, _isNew: !existing }
+  },
+
+  async getEpisode(episodeId) {
+    const ep = await store.getEpisode(episodeId)
+    return ep ? withState(ep) : null
   },
 
   async listShows() {

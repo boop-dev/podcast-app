@@ -53,7 +53,7 @@ export default function SearchView({ onSubscribed }) {
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search podcasts…"
         />
-        <button className="primary" type="submit" disabled={loading}>
+        <button className="pill primary" type="submit" disabled={loading}>
           Search
         </button>
       </form>
@@ -71,7 +71,7 @@ export default function SearchView({ onSubscribed }) {
           onChange={(e) => setFeedUrl(e.target.value)}
           placeholder="…or paste an RSS feed URL"
         />
-        <button type="submit" disabled={loading}>
+        <button className="pill" type="submit" disabled={loading}>
           Add feed
         </button>
       </form>
@@ -81,13 +81,13 @@ export default function SearchView({ onSubscribed }) {
       {loading && <p className="muted">Working…</p>}
 
       {results.map((r) => (
-        <div key={r.feedUrl} className="card result-row">
-          {r.artworkUrl && <img src={r.artworkUrl} alt="" />}
-          <div style={{ flex: 1 }}>
-            <h3 style={{ margin: '0 0 4px' }}>{r.collectionName}</h3>
-            <p className="muted">{r.artistName}</p>
-          </div>
-          <button className="primary" onClick={() => subscribe(r.feedUrl)} disabled={loading}>
+        <div key={r.feedUrl} className="card list-row">
+          {r.artworkUrl ? <img className="thumb" src={r.artworkUrl} alt="" /> : <span className="art-empty thumb" />}
+          <span className="row-text" style={{ flex: 1 }}>
+            <span className="row-title">{r.collectionName}</span>
+            <span className="muted">{r.artistName}</span>
+          </span>
+          <button className="pill primary" onClick={() => subscribe(r.feedUrl)} disabled={loading}>
             Subscribe
           </button>
         </div>

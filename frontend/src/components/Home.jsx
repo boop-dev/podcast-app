@@ -15,15 +15,17 @@ export default function Home({ onPlay, refreshKey }) {
 
   function Row({ ep, label }) {
     return (
-      <div className="card home-row" onClick={() => onPlay(ep, ep.show_title)}>
-        {ep.show_image && <img src={ep.show_image} alt="" />}
-        <div>
-          <h3>{ep.title}</h3>
-          <p>
-            {ep.show_title}
-            {label ? ` · ${label}` : ''}
-          </p>
-        </div>
+      <div className="card list-row">
+        <button className="row-main" onClick={() => onPlay(ep, ep.show_title)}>
+          {ep.show_image ? <img src={ep.show_image} alt="" /> : <span className="art-empty thumb" />}
+          <span className="row-text">
+            <span className="row-title">{ep.title}</span>
+            <span className="muted">
+              {ep.show_title}
+              {label ? ` · ${label}` : ''}
+            </span>
+          </span>
+        </button>
       </div>
     )
   }

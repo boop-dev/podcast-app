@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { api, exportOpmlToFile, isNative } from '../api'
 import EpisodeRow from './EpisodeRow'
+import Icon from './Icon'
+import { useBackHandler } from '../lib/back'
 
 export default function Shows({ shows, onPlay, queueIds, onToggleQueue, downloadedIds, onDownloadChanged, onRefresh }) {
   const [selected, setSelected] = useState(null) // a show row
@@ -59,6 +61,8 @@ export default function Shows({ shows, onPlay, queueIds, onToggleQueue, download
     onRefresh()
   }
 
+  useBackHandler(Boolean(selected), () => leaveShow())
+
   // Leaving a show counts as having seen its new episodes.
   async function leaveShow() {
     if (selected) await api.markShowSeen(selected.id).catch(() => {})
@@ -92,8 +96,10 @@ export default function Shows({ shows, onPlay, queueIds, onToggleQueue, download
   if (selected) {
     return (
       <div>
-        <button onClick={leaveShow}>← All shows</button>
-        <div className="show-detail" style={{ marginTop: 12 }}>
+        <button className="back-link" onClick={leaveShow}>
+          <Icon name="chevronLeft" size={18} /> All shows
+        </button>
+        <div className="show-detail">
           {selected.image_url && <img src={selected.image_url} alt="" />}
           <div>
             <h2>{selected.title}</h2>
@@ -101,16 +107,21 @@ export default function Shows({ shows, onPlay, queueIds, onToggleQueue, download
             <p className="muted">{episodes.length} episodes</p>
           </div>
         </div>
-        <button onClick={refresh} disabled={loading}>
-          Check for new episodes
-        </button>{' '}
-        <button onClick={() => setHidePlayed(!hidePlayed)}>
-          {hidePlayed ? 'Show played' : 'Hide played'}
-        </button>
+        <div className="toolbar">
+          <button className="pill" onClick={refresh} disabled={loading}>
+            Check for new
+          </button>
+          <button className={`pill${hidePlayed ? ' on' : ''}`} onClick={() => setHidePlayed(!hidePlayed)}>
+            {hidePlayed ? 'Showing unplayed' : 'Hide played'}
+          </button>
+        </div>
         {isNative() && (
-          <label className="muted" style={{ display: 'block', marginTop: 8 }}>
-            <input type="checkbox" checked={Boolean(selected.auto_download)} onChange={toggleAutoDownload} />{' '}
-            Auto-download new episodes (Wi-Fi) and delete after playing
+          <label className="setting-row">
+            <span>
+              Auto-download new episodes
+              <small>On Wi-Fi only. Deleted after you finish them.</small>
+            </span>
+            <input type="checkbox" checked={Boolean(selected.auto_download)} onChange={toggleAutoDownload} />
           </label>
         )}
         {error && <div className="error" style={{ marginTop: 12 }}>{error}</div>}
@@ -147,30 +158,28 @@ export default function Shows({ shows, onPlay, queueIds, onToggleQueue, download
 
   return (
     <div>
-      {shows.map((show) => (
-        <div key={show.id} className="card show-row" onClick={() => setSelected(show)}>
-          {show.image_url && <img src={show.image_url} alt="" />}
-          <div>
-            <h3>
-              {show.title}
-              {show.new_count > 0 && <span className="new-tag">{show.new_count} new</span>}
-            </h3>
-            <p>
-              {show.author}
-              {show.episode_count ? ` · ${show.episode_count} episodes` : ''}
-            </p>
-          </div>
-        </div>
-      ))}
-      <p className="muted">
-        <a href="/api/opml" download onClick={exportOpml}>Export subscriptions as OPML</a> to move them to
-        another app.
-      </p>
-      {isNative() && (
+      <div className="show-grid">
+        {shows.map((show) => (
+          <button key={show.id} className="show-tile" onClick={() => setSelected(show)}>
+            <span className="tile-art">
+              {show.image_url ? <img src={show.image_url} alt="" /> : <span className="art-empty" />}
+              {show.new_count > 0 && <b className="badge">{show.new_count}</b>}
+            </span>
+            <span className="tile-title">{show.title}</span>
+          </button>
+        ))}
+      </div>
+      <div className="card footnote">
         <p className="muted">
-          Import subscriptions from OPML: <input type="file" accept=".opml,.xml,text/xml" onChange={importOpml} />
+          <a href="/api/opml" download onClick={exportOpml}>Export subscriptions (OPML)</a> to move them to
+          another app.
         </p>
-      )}
+        {isNative() && (
+          <p className="muted">
+            Import OPML: <input type="file" accept=".opml,.xml,text/xml" onChange={importOpml} />
+          </p>
+        )}
+      </div>
       {opmlMsg && <p className="muted">{opmlMsg}</p>}
     </div>
   )

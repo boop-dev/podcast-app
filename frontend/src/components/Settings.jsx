@@ -69,17 +69,17 @@ export default function Settings({ onChanged }) {
         <>
           <p className="muted">Using {formatBytes(usage.total)}</p>
           {usage.rows.map((row) => (
-            <div key={row.showId} className="card home-row" style={{ cursor: 'default' }}>
-              <div style={{ flex: 1 }}>
-                <h3>{row.title}</h3>
-                <p>
+            <div key={row.showId} className="card list-row">
+              <span className="row-text" style={{ flex: 1 }}>
+                <span className="row-title">{row.title}</span>
+                <span className="muted">
                   {row.count} episode{row.count === 1 ? '' : 's'} · {formatBytes(row.bytes)}
-                </p>
-              </div>
-              <button onClick={() => deleteShow(row)}>Delete</button>
+                </span>
+              </span>
+              <button className="pill" onClick={() => deleteShow(row)}>Delete</button>
             </div>
           ))}
-          <button onClick={deletePlayed}>Delete played downloads</button>
+          <button className="pill" onClick={deletePlayed}>Delete played downloads</button>
         </>
       )}
 
@@ -88,7 +88,7 @@ export default function Settings({ onChanged }) {
         Saves your shows, listening positions, played state and queue to a file in Documents. Restore it
         after reinstalling or on a new phone.
       </p>
-      <button onClick={backup}>Back up now</button>
+      <button className="pill primary" onClick={backup}>Back up now</button>
       <p className="muted">
         Restore from backup: <input type="file" accept=".json,application/json" onChange={restore} />
       </p>

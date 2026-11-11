@@ -1,6 +1,7 @@
 /* Queue tab: the Up Next list, with move-up / move-down / remove. */
 
 import { api } from '../api'
+import Icon from './Icon'
 
 export default function QueueView({ queue, onPlay, onQueueChanged }) {
   async function move(episodeId, direction) {
@@ -21,7 +22,7 @@ export default function QueueView({ queue, onPlay, onQueueChanged }) {
   if (queue.length === 0) {
     return (
       <div className="empty">
-        Your queue is empty. Add episodes from any show with “Add to queue”.
+        Your queue is empty. Add episodes from any show with the + button.
       </div>
     )
   }
@@ -29,22 +30,28 @@ export default function QueueView({ queue, onPlay, onQueueChanged }) {
   return (
     <div>
       {queue.map((ep, i) => (
-        <div key={ep.id} className="card">
-          <h3 style={{ margin: '0 0 4px' }}>
-            {i + 1}. {ep.title}
-          </h3>
-          <div className="actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button className="primary" onClick={() => onPlay(ep)}>
-              Play
-            </button>
-            <button onClick={() => move(ep.id, -1)} disabled={i === 0}>
-              ↑ Up
-            </button>
-            <button onClick={() => move(ep.id, 1)} disabled={i === queue.length - 1}>
-              ↓ Down
-            </button>
-            <button onClick={() => remove(ep.id)}>Remove</button>
-          </div>
+        <div key={ep.id} className="card list-row">
+          <button className="row-main" onClick={() => onPlay(ep, ep.show_title)}>
+            {ep.show_image ? <img src={ep.show_image} alt="" /> : <span className="art-empty thumb" />}
+            <span className="row-text">
+              <span className="row-title">{ep.title}</span>
+              <span className="muted">{ep.show_title}</span>
+            </span>
+          </button>
+          <button className="icon-btn" onClick={() => move(ep.id, -1)} disabled={i === 0} aria-label="Move up">
+            <Icon name="up" size={20} />
+          </button>
+          <button
+            className="icon-btn"
+            onClick={() => move(ep.id, 1)}
+            disabled={i === queue.length - 1}
+            aria-label="Move down"
+          >
+            <Icon name="down" size={20} />
+          </button>
+          <button className="icon-btn" onClick={() => remove(ep.id)} aria-label="Remove">
+            <Icon name="trash" size={20} />
+          </button>
         </div>
       ))}
     </div>

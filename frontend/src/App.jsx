@@ -1,15 +1,26 @@
 /* App shell: three tabs (Shows / Search / Queue) and the player bar.
  * The player state lives here so any view can start playback. */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, isNative } from './api'
+import { App as CapApp } from '@capacitor/app'
 import { syncAll } from './mobile/sync'
+import { handleBack } from './lib/back'
 import Player from './components/Player'
 import Shows from './components/Shows'
 import SearchView from './components/SearchView'
 import QueueView from './components/QueueView'
 import Home from './components/Home'
 import Settings from './components/Settings'
+import Icon from './components/Icon'
+
+const TITLES = {
+  home: 'Home',
+  shows: 'Library',
+  search: 'Search',
+  queue: 'Up Next',
+  settings: 'Settings',
+}
 
 export default function App() {
   const [view, setView] = useState(isNative() ? 'home' : 'shows')
@@ -47,6 +58,28 @@ export default function App() {
     refreshDownloads()
   }, [refreshShows, refreshQueue, refreshDownloads])
 
+  // Native back button: close the player sheet / leave a show first, then
+  // return to the first tab, and only then minimise (never destroy the
+  // activity, which would stop playback).
+  const viewRef = useRef(view)
+  viewRef.current = view
+  useEffect(() => {
+    if (!isNative()) return undefined
+    const home = 'home'
+    const sub = CapApp.addListener('backButton', () => {
+      if (handleBack()) return
+      if (viewRef.current !== home) {
+        setView(home)
+        setPlayTick((n) => n + 1)
+        return
+      }
+      CapApp.minimizeApp()
+    })
+    return () => {
+      sub.then((h) => h.remove())
+    }
+  }, [])
+
   // Native only: refresh feeds (and auto-download) on start and on resume.
   useEffect(() => {
     if (!isNative()) return
@@ -71,10 +104,24 @@ export default function App() {
   }, [refreshShows, refreshDownloads])
 
   function playEpisode(episode, showTitle = '') {
-    setNowPlaying({ episode, showTitle, autoplay: true })
+    setNowPlaying({ episode, showTitle, autoplay: true, token: Date.now() + Math.random() })
   }
 
-  // When an episode ends, play the next queued episode, if any.
+  // Native player: the service moved to another episode on its own (queue
+  // auto-advance, or the app was reopened while it kept playing). Show it.
+  async function followNative(id) {
+    const ep = await api.getEpisode(id).catch(() => null)
+    if (!ep) return
+    setNowPlaying({
+      episode: ep,
+      showTitle: ep.show_title || '',
+      autoplay: false,
+      native: true,
+      token: Date.now() + Math.random(),
+    })
+  }
+
+  // Web player only: when an episode ends, play the next queued episode, if any.
   async function handleEnded() {
     if (queue.length === 0) return
     const next = queue[0]
@@ -92,34 +139,19 @@ export default function App() {
     refreshQueue()
   }
 
+  const tabs = [
+    ...(isNative() ? [{ id: 'home', label: 'Home', icon: 'home' }] : []),
+    { id: 'shows', label: 'Library', icon: 'library' },
+    { id: 'search', label: 'Search', icon: 'search' },
+    { id: 'queue', label: 'Up Next', icon: 'queue' },
+    ...(isNative() ? [{ id: 'settings', label: 'Settings', icon: 'settings' }] : []),
+  ]
+
   return (
     <div className="app">
       <header className="app-header">
-        <h1>Podcasts</h1>
-        <span className="muted">No ads · No tracking · No account</span>
+        <h1>{TITLES[view]}</h1>
       </header>
-
-      <nav className="tabs">
-        {isNative() && (
-          <button className={view === 'home' ? 'active' : ''} onClick={() => { setPlayTick((n) => n + 1); setView('home') }}>
-            Home
-          </button>
-        )}
-        <button className={view === 'shows' ? 'active' : ''} onClick={() => setView('shows')}>
-          Shows
-        </button>
-        <button className={view === 'search' ? 'active' : ''} onClick={() => setView('search')}>
-          Search
-        </button>
-        <button className={view === 'queue' ? 'active' : ''} onClick={() => setView('queue')}>
-          Up Next ({queue.length})
-        </button>
-        {isNative() && (
-          <button className={view === 'settings' ? 'active' : ''} onClick={() => setView('settings')}>
-            Settings
-          </button>
-        )}
-      </nav>
 
       {error && <div className="error">{error}</div>}
 
@@ -157,11 +189,29 @@ export default function App() {
       )}
 
       <Player
-        episode={nowPlaying?.episode || null}
-        showTitle={nowPlaying?.showTitle || ''}
-        autoplay={nowPlaying?.autoplay || false}
+        nowPlaying={nowPlaying}
+        queue={queue}
         onEnded={handleEnded}
+        onNativeChange={followNative}
+        onQueueChanged={refreshQueue}
       />
+
+      <nav className="tabbar">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            className={view === t.id ? 'active' : ''}
+            onClick={() => {
+              if (t.id === 'home') setPlayTick((n) => n + 1)
+              setView(t.id)
+            }}
+          >
+            <Icon name={t.icon} />
+            <span>{t.label}</span>
+            {t.id === 'queue' && queue.length > 0 && <b className="badge">{queue.length}</b>}
+          </button>
+        ))}
+      </nav>
     </div>
   )
 }

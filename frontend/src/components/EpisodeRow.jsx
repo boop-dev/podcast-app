@@ -3,6 +3,7 @@
 
 import { useState } from 'react'
 import { api } from '../api'
+import Icon from './Icon'
 import { downloadEpisode, removeDownload } from '../lib/downloads'
 
 export function formatDuration(totalSeconds) {
@@ -67,17 +68,35 @@ export default function EpisodeRow({ episode, onPlay, inQueue, onToggleQueue, do
       </div>
       {episode.description && <p className="desc">{stripHtml(episode.description)}</p>}
       <div className="actions">
-        <button className="primary" onClick={() => onPlay(episode)}>
+        <button className="pill primary" onClick={() => onPlay(episode)}>
+          <Icon name="play" size={16} />
           {episode.position_seconds > 10 && !episode.completed ? 'Resume' : 'Play'}
         </button>
-        <button onClick={() => onToggleQueue(episode)}>
-          {inQueue ? 'Remove from queue' : 'Add to queue'}
+        <span className="spacer" />
+        <button
+          className={`icon-btn${inQueue ? ' on' : ''}`}
+          onClick={() => onToggleQueue(episode)}
+          title={inQueue ? 'Remove from queue' : 'Add to queue'}
+          aria-label={inQueue ? 'Remove from queue' : 'Add to queue'}
+        >
+          <Icon name={inQueue ? 'minus' : 'plus'} />
         </button>
-        <button onClick={toggleDownload} disabled={busy}>
-          {downloaded ? 'Delete download' : 'Download'}
+        <button
+          className={`icon-btn${downloaded ? ' on' : ''}`}
+          onClick={toggleDownload}
+          disabled={busy}
+          title={downloaded ? 'Delete download' : 'Download'}
+          aria-label={downloaded ? 'Delete download' : 'Download'}
+        >
+          <Icon name={downloaded ? 'downloaded' : 'download'} />
         </button>
-        <button onClick={togglePlayed}>
-          {episode.completed ? 'Mark unplayed' : 'Mark played'}
+        <button
+          className={`icon-btn${episode.completed ? ' on' : ''}`}
+          onClick={togglePlayed}
+          title={episode.completed ? 'Mark unplayed' : 'Mark played'}
+          aria-label={episode.completed ? 'Mark unplayed' : 'Mark played'}
+        >
+          <Icon name="check" />
         </button>
       </div>
       {progress > 0 && !episode.completed && (
