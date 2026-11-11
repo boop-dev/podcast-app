@@ -122,7 +122,13 @@ export default function App() {
     sync()
     const onVisible = () => document.visibilityState === 'visible' && sync()
     document.addEventListener('visibilitychange', onVisible)
-    return () => document.removeEventListener('visibilitychange', onVisible)
+    // A notification button was pressed while the app was already open.
+    const onAction = () => applyNotificationActions()
+    window.addEventListener('notificationaction', onAction)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('notificationaction', onAction)
+    }
   }, [refreshShows, refreshDownloads])
 
   // Downloads finish in the background: refresh the "downloaded" badges when they do.

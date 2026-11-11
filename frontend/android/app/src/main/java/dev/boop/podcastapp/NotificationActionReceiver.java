@@ -32,5 +32,6 @@ public class NotificationActionReceiver extends BroadcastReceiver {
         } catch (Exception ignored) {
         }
         NotificationManagerCompat.from(ctx).cancel(intent.getIntExtra("notifId", 0));
+        MainActivity.pokeJs(); // if the app is open, apply the queue change now
     }
 }
