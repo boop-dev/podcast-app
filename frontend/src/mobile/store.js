@@ -45,6 +45,31 @@ const stores = {
   queue: localforage.createInstance({ name: 'podcast-app', storeName: 'queue' }),
   downloads: localforage.createInstance({ name: 'podcast-app', storeName: 'downloads' }),
   settings: localforage.createInstance({ name: 'podcast-app', storeName: 'settings' }),
+  listening: localforage.createInstance({ name: 'podcast-app', storeName: 'listening' }),
+}
+
+// --- listening stats ---------------------------------------------------------
+// One row per local day and show: {date: 'YYYY-MM-DD', showId, ms}.
+
+export function localDate(d = new Date()) {
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
+export async function addListening(showId, ms, date = localDate()) {
+  if (!showId || !(ms > 0)) return
+  const key = `${date}|${showId}`
+  const row = (await stores.listening.getItem(key)) || { date, showId, ms: 0 }
+  row.ms += ms
+  await stores.listening.setItem(key, row)
+}
+
+export async function listListening() {
+  const out = []
+  await stores.listening.iterate((value) => {
+    out.push(value)
+  })
+  return out
 }
 
 // --- settings --------------------------------------------------------------

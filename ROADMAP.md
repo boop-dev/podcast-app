@@ -83,7 +83,7 @@ and decide on detection only after a feasibility spike.
 - [x] Search tab: mark already-subscribed shows, show genre / episode count / latest release — S
 - [x] Episode detail page — M
 - [x] Share episode link — S
-- [ ] Listening stats (time per show / week) — M
+- [x] Listening stats (time per show / week) — M
 
 ## Downloads
 

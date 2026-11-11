@@ -11,6 +11,7 @@ import {
 import { CAP_OPTIONS_GB } from '../lib/storageCap'
 import { getTheme, setTheme } from '../lib/theme'
 import Picker from './Picker'
+import ListeningStats from './ListeningStats'
 
 function formatBytes(n) {
   if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`
@@ -156,6 +157,8 @@ export default function Settings({ onChanged }) {
 
   return (
     <div>
+      <ListeningStats />
+
       <h2 className="section">Appearance</h2>
       <div className="setting-row">
         <span>Theme</span>

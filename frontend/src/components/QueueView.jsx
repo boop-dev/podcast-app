@@ -49,7 +49,7 @@ function SwipeToRemove({ onSwipe, children }) {
 
   return (
     <div className="swipe-wrap">
-      <div className="swipe-bg" aria-hidden="true"><Icon name="trash" size={20} /> Remove</div>
+      <div className="swipe-bg" aria-hidden="true" style={{ visibility: dx < 0 ? 'visible' : 'hidden' }}><Icon name="trash" size={20} /> Remove</div>
       <div
         className="swipe-fg"
         style={{ transform: `translateX(${dx}px)`, transition: drag.current && drag.current.locked ? 'none' : 'transform 0.18s ease' }}

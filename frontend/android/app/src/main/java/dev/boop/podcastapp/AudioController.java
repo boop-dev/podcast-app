@@ -60,6 +60,7 @@ public final class AudioController {
     private static final String PREFS = "native_audio";
     private static final String KEY_DIRTY = "dirty";
     private static final String KEY_CONSUMED = "consumed";
+    private static final String KEY_LISTENED = "listened";
     private static final long SAVE_INTERVAL_MS = 5000;
     private static final String KEY_SKIP_SILENCE = "opt_skip_silence";
     private static final String KEY_BOOST = "opt_boost";
@@ -100,6 +101,8 @@ public final class AudioController {
 
     private JSONObject dirty = new JSONObject();      // id -> {positionMs, durationMs, completed}
     private JSONArray consumed = new JSONArray();     // ids that auto-started from the up-next list
+    private JSONObject listened = new JSONObject();   // id -> ms played since the last drain (stats)
+    private long playingSince = 0;                    // wall-clock start of the current play stretch, 0 if paused
     private String lastId = null;
     private int skipBackSec = 15;
     private int skipForwardSec = 30;
@@ -185,6 +188,7 @@ public final class AudioController {
         try {
             dirty = new JSONObject(prefs.getString(KEY_DIRTY, "{}"));
             consumed = new JSONArray(prefs.getString(KEY_CONSUMED, "[]"));
+            listened = new JSONObject(prefs.getString(KEY_LISTENED, "{}"));
         } catch (JSONException ignored) {
         }
 
@@ -236,6 +240,7 @@ public final class AudioController {
                         && item.mediaMetadata.extras != null && item.mediaMetadata.extras.getBoolean("refresh")) {
                     return;
                 }
+                accumulateListening(); // credit the outgoing episode before lastId changes
                 shownChapter = -2;
                 // Each show can have its own playback speed: apply the new item's.
                 if (item != null && item.mediaMetadata.extras != null
@@ -590,7 +595,27 @@ public final class AudioController {
         }
     }
 
+    /**
+     * Listening stats: add the wall-clock time the current episode has been playing since the
+     * last call. Called at every save and before the current item changes, so it is exact
+     * even while the WebView is frozen. JS collects it with drain().
+     */
+    private void accumulateListening() {
+        long now = System.currentTimeMillis();
+        if (playingSince > 0 && lastId != null) {
+            long delta = Math.min(now - playingSince, 120_000); // a stalled timer must not invent hours
+            if (delta > 0) {
+                try {
+                    listened.put(lastId, listened.optLong(lastId, 0) + delta);
+                } catch (JSONException ignored) {
+                }
+            }
+        }
+        playingSince = player.isPlaying() ? now : 0;
+    }
+
     public void saveNow() {
+        accumulateListening();
         persistResume();
         if (lastId == null || player.getMediaItemCount() == 0) return;
         long pos = player.getCurrentPosition();
@@ -610,7 +635,8 @@ public final class AudioController {
     }
 
     private void persist() {
-        prefs.edit().putString(KEY_DIRTY, dirty.toString()).putString(KEY_CONSUMED, consumed.toString()).apply();
+        prefs.edit().putString(KEY_DIRTY, dirty.toString()).putString(KEY_CONSUMED, consumed.toString())
+                .putString(KEY_LISTENED, listened.toString()).apply();
     }
 
     /** Hand everything recorded since the last drain to JS, and clear it. */
@@ -633,10 +659,17 @@ public final class AudioController {
             }
             out.put("positions", positions);
             out.put("consumed", consumed);
+            JSONArray heard = new JSONArray();
+            JSONArray ids = listened.names();
+            for (int i = 0; ids != null && i < ids.length(); i++) {
+                heard.put(new JSONObject().put("id", ids.getString(i)).put("ms", listened.optLong(ids.getString(i))));
+            }
+            out.put("listened", heard);
         } catch (JSONException ignored) {
         }
         dirty = new JSONObject();
         consumed = new JSONArray();
+        listened = new JSONObject();
         persist();
         return out;
     }

@@ -49,7 +49,12 @@ export async function applyDrain(api) {
   if (draining) return false
   draining = true
   try {
-    const { positions = [], consumed = [] } = await NativeAudio.drain()
+    const { positions = [], consumed = [], listened = [] } = await NativeAudio.drain()
+    // Time actually played, credited to the show (and today) for the stats screen.
+    for (const { id, ms } of listened) {
+      const ep = await store.getEpisode(id).catch(() => null)
+      if (ep) await store.addListening(ep.show_id, ms)
+    }
     for (const p of positions) {
       await api.savePosition(
         p.id,
