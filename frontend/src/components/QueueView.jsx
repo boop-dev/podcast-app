@@ -4,6 +4,7 @@
 import { useState } from 'react'
 import { api } from '../api'
 import Icon from './Icon'
+import { shareEpisode } from '../lib/share'
 
 export default function QueueView({ queue, onPlay, onQueueChanged }) {
   const [menuFor, setMenuFor] = useState(null) // episode id whose menu is open
@@ -105,6 +106,9 @@ export default function QueueView({ queue, onPlay, onQueueChanged }) {
               </button>
               <button role="menuitem" onClick={() => moveTo(ep.id, 'bottom')} disabled={i === queue.length - 1}>
                 <Icon name="bottom" size={16} /> Move to bottom
+              </button>
+              <button role="menuitem" onClick={() => { setMenuFor(null); shareEpisode(ep, ep.show_title) }}>
+                <Icon name="share" size={16} /> Share
               </button>
               <button role="menuitem" className="danger" onClick={() => remove(ep.id)}>
                 <Icon name="trash" size={16} /> Remove

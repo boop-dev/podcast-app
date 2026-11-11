@@ -42,6 +42,14 @@ const PATHS = {
       <text x="12" y="15.5" fontSize={String(label).length > 2 ? 6 : 7.5} textAnchor="middle" fill="currentColor" stroke="none" fontWeight="700">{label}</text>
     </>
   ),
+  share: (
+    <>
+      <circle cx="18" cy="5" r="2.6" />
+      <circle cx="6" cy="12" r="2.6" />
+      <circle cx="18" cy="19" r="2.6" />
+      <path d="M8.3 10.8l7.4-4.3M8.3 13.2l7.4 4.3" />
+    </>
+  ),
   clock: (
     <>
       <circle cx="12" cy="12" r="8.5" />

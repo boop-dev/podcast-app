@@ -25,6 +25,7 @@ import { Directory, Filesystem } from '@capacitor/filesystem'
 import { buildOpmlXml, parseOpmlFeedUrls } from './opml.js'
 import { fetchFeed, httpGetJson, normalizeChapters } from './rss.js'
 import { localName } from './downloads.js'
+import { rankEpisodes } from '../lib/episodeList.js'
 import * as store from './store.js'
 
 const ITUNES_SEARCH_URL = 'https://itunes.apple.com/search'
@@ -48,14 +49,18 @@ async function withState(ep) {
   }
 }
 
-// Episodes stored before chapter support have no chapters_url: fill it in
-// from the fresh feed (never touching anything else about them).
+// Episodes stored before a field existed (chapters_url, link) get it filled in
+// from the fresh feed, never touching anything else about them.
 async function backfillChapterUrls(stored, incoming) {
   const byId = new Map(stored.map((ep) => [ep.id, ep]))
   const updates = []
   for (const ep of incoming) {
     const old = byId.get(ep.id)
-    if (old && !old.chapters_url && ep.chapters_url) updates.push({ ...old, chapters_url: ep.chapters_url })
+    if (!old) continue
+    const patch = {}
+    if (!old.chapters_url && ep.chapters_url) patch.chapters_url = ep.chapters_url
+    if (!old.link && ep.link) patch.link = ep.link
+    if (Object.keys(patch).length) updates.push({ ...old, ...patch })
   }
   if (updates.length) await store.putEpisodes(updates)
 }
@@ -84,6 +89,8 @@ export const mobileApi = {
         artworkUrl: item.artworkUrl600 || item.artworkUrl100,
         feedUrl: item.feedUrl,
         trackCount: item.trackCount,
+        genre: item.primaryGenreName || null,
+        lastRelease: item.releaseDate || null,
       })
     }
     return { results }
@@ -106,6 +113,13 @@ export const mobileApi = {
     await store.putEpisodes(fresh)
     const count = await store.countEpisodesForShow(show.id)
     return { ...show, episode_count: count, _isNew: !existing }
+  },
+
+  /** Search every stored episode (title and description). Best matches first. */
+  async searchEpisodes(query, limit = 50) {
+    if (String(query || '').trim().length < 2) return []
+    const hits = rankEpisodes(await store.listAllEpisodes(), query, limit)
+    return Promise.all(hits.map(withState))
   },
 
   async getEpisode(episodeId) {

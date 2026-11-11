@@ -27,6 +27,7 @@ import { normalizeChapters, parseDuration, parseFeedXml, textOf } from '../src/m
 import { currentChapter, splitTimestamps } from '../src/lib/notes.js'
 import { adRanges, isAdChapter } from '../src/lib/adChapters.js'
 import { DownloadQueue } from '../src/lib/downloadQueue.js'
+import { applyListView, rankEpisodes, scoreEpisode, shareText } from '../src/lib/episodeList.js'
 import { localName } from '../src/mobile/downloads.js'
 import { pickEvictions } from '../src/lib/storageCap.js'
 import * as store from '../src/mobile/store.js'
@@ -361,6 +362,46 @@ try {
   check('cap: unfinished episodes go after finished ones', JSON.stringify(pickEvictions(recs, 150 * MB, ['D'])) === '["A","C","B"]')
   check('cap: no cap or under the cap evicts nothing', pickEvictions(recs, 0).length === 0 && pickEvictions(recs, 500 * MB).length === 0)
   check('cap: all protected evicts nothing', pickEvictions(recs, 10 * MB, ['A', 'B', 'C', 'D']).length === 0)
+}
+
+// --- 14. Episode search, filters, sorting, sharing ---
+{
+  const E = (id, title, description, extra = {}) => ({ id, title, description, pub_date: '2026-01-01T00:00:00Z', ...extra })
+  check('search: every word must match', scoreEpisode(E('1', 'Ocean stories', ''), 'ocean tides') === 0 && scoreEpisode(E('2', 'Ocean stories', 'about tides'), 'ocean tides') > 0)
+  check('search: HTML tags in notes are ignored', scoreEpisode(E('3', 'x', '<p>talk about <b>Ocean</b></p>'), 'ocean') > 0 && scoreEpisode(E('4', 'x', '<p class="q">plain</p>'), 'class') === 0)
+  const ranked = rankEpisodes([
+    E('d', 'Other', 'mentions deep sea in notes', { pub_date: '2026-03-01T00:00:00Z' }),
+    E('t1', 'Deep sea creatures', '', { pub_date: '2026-01-01T00:00:00Z' }),
+    E('t2', 'Deep sea creatures', '', { pub_date: '2026-02-01T00:00:00Z' }),
+    E('n', 'Unrelated', ''),
+  ], 'deep sea')
+  check('search: title matches beat note matches, then newest first, misses dropped', ranked.map((e) => e.id).join() === 't2,t1,d', ranked.map((e) => e.id).join())
+  check('search: limit and empty query', rankEpisodes([E('a', 'a', '')], '').length === 0 && rankEpisodes([E('a', 'abc', ''), E('b', 'abd', '')], 'ab', 1).length === 1)
+
+  const L = [
+    { id: 'a', title: 'Alpha', duration_seconds: 100, completed: false, position_seconds: 0 },
+    { id: 'b', title: 'Beta', duration_seconds: 300, completed: true, position_seconds: 0 },
+    { id: 'c', title: 'Gamma', duration_seconds: 200, completed: false, position_seconds: 50 },
+    { id: 'd', title: 'Delta', duration_seconds: null, completed: false, position_seconds: 0 },
+  ]
+  const ids = (v) => v.map((e) => e.id).join('')
+  check('filter: unplayed', ids(applyListView(L, { filter: 'unplayed' })) === 'acd')
+  check('filter: in progress', ids(applyListView(L, { filter: 'progress' })) === 'c')
+  check('filter: downloaded', ids(applyListView(L, { filter: 'downloaded', downloadedIds: new Set(['b', 'd']) })) === 'bd')
+  check('sort: oldest, longest, shortest (unknown durations last / first as expected)',
+    ids(applyListView(L, { sort: 'old' })) === 'dcba' && ids(applyListView(L, { sort: 'long' })) === 'bcad' && ids(applyListView(L, { sort: 'short' })) === 'acbd')
+  check('filter + search combine', ids(applyListView(L, { filter: 'unplayed', query: 'ga' })) === 'c')
+  check('share: prefers the episode page, falls back to the audio link',
+    shareText({ title: 'T', link: 'https://x.test/ep', audio_url: 'https://x.test/a.mp3' }, 'Show').url === 'https://x.test/ep' &&
+    shareText({ title: 'T', audio_url: 'https://x.test/a.mp3' }, 'Show').url === 'https://x.test/a.mp3' &&
+    shareText({ title: 'T' }, 'Show').text === 'T — Show')
+
+  const xml = `<?xml version="1.0"?><rss version="2.0"><channel><title>T</title>
+    <item><title>Page</title><guid>p</guid><link>https://x.test/episodes/1</link><enclosure url="https://x.test/p.mp3" type="audio/mpeg"/></item>
+    <item><title>AudioLink</title><guid>q</guid><link>https://x.test/q.mp3</link><enclosure url="https://x.test/q.mp3" type="audio/mpeg"/></item></channel></rss>`
+  const feed = parseFeedXml(xml, 'https://x.test/feed2')
+  const by = Object.fromEntries(feed.episodes.map((e) => [e.title, e]))
+  check('feed: episode page link is read, audio-file links are not treated as a page', by.Page.link === 'https://x.test/episodes/1' && by.AudioLink.link === null)
 }
 
 // --- cleanup: delete-show cascade ---

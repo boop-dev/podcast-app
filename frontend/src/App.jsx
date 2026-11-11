@@ -201,6 +201,10 @@ export default function App() {
             refreshShows()
             setView('shows')
           }}
+          onPlay={playEpisode}
+          onToggleQueue={toggleQueue}
+          onPlayNext={playNext}
+          queueIds={new Set(queue.map((ep) => ep.id))}
         />
       )}
       {view === 'queue' && (

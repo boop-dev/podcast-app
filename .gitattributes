@@ -1,0 +1,7 @@
+# Keep line endings stable across machines: LF in the repo and in working copies.
+* text=auto eol=lf
+*.png binary
+*.jks binary
+*.jar binary
+*.webp binary
+*.ico binary

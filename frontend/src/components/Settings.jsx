@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api'
+import { App as CapApp } from '@capacitor/app'
 import { NativeAudio } from '../lib/nativeAudio'
 import { configureFeedWatch } from '../lib/feedWatch'
 import {
@@ -29,6 +30,11 @@ export default function Settings({ onChanged }) {
   const [watch, setWatch] = useState({ enabled: false, intervalHours: 3 })
   const jobs = useDownloads()
   const [capGb, setCap] = useState(0)
+  const [appInfo, setAppInfo] = useState(null)
+
+  useEffect(() => {
+    CapApp.getInfo().then(setAppInfo).catch(() => {})
+  }, [])
 
   useEffect(() => {
     getCapGb().then(setCap).catch(() => {})
@@ -284,6 +290,11 @@ export default function Settings({ onChanged }) {
         Restore from backup: <input type="file" accept=".json,application/json" onChange={restore} />
       </p>
       {msg && <p className="muted">{msg}</p>}
+      {appInfo && (
+        <p className="muted about">
+          {appInfo.name} {appInfo.version} (build {appInfo.build})
+        </p>
+      )}
     </div>
   )
 }

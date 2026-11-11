@@ -74,11 +74,11 @@ and decide on detection only after a feasibility spike.
 ## Library and discovery
 
 - [ ] Per-show settings screen (speed, skip intro, auto-download, alerts) — M
-- [ ] Search across all episodes — M
-- [ ] Sort / filter by duration, downloaded, unplayed — S
-- [ ] Search tab: mark already-subscribed shows, show description — S
+- [x] Search across all episodes — M
+- [x] Sort / filter by duration, downloaded, unplayed — S
+- [x] Search tab: mark already-subscribed shows, show genre / episode count / latest release — S
 - [ ] Episode detail page — M
-- [ ] Share episode link — S
+- [x] Share episode link — S
 - [ ] Listening stats (time per show / week) — M
 
 ## Downloads
@@ -104,9 +104,9 @@ and decide on detection only after a feasibility spike.
 ## Distribution and engineering
 
 - [ ] Signed release build (not a debug APK) — M
-- [ ] Human-readable versionName — S
+- [x] Human-readable versionName — S
 - [ ] GitHub Actions release builds + Obtainium updates — M
-- [ ] `.gitattributes` to stop line-ending noise — S
+- [x] `.gitattributes` to stop line-ending noise — S
 - [ ] Automated UI / native tests — L
 
 ## Still to validate (not new features)

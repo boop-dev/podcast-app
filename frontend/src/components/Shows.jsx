@@ -6,6 +6,7 @@ import EpisodeRow from './EpisodeRow'
 import Icon from './Icon'
 import { useBackHandler } from '../lib/back'
 import { enqueueMany } from '../lib/downloadManager'
+import { FILTERS, SORTS, applyListView } from '../lib/episodeList'
 
 export default function Shows({ shows, onPlay, queueIds, onToggleQueue, onPlayNext, downloadedIds, onDownloadChanged, onRefresh }) {
   const [selected, setSelected] = useState(null) // a show row
@@ -13,9 +14,9 @@ export default function Shows({ shows, onPlay, queueIds, onToggleQueue, onPlayNe
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [opmlMsg, setOpmlMsg] = useState('')
-  const [hidePlayed, setHidePlayed] = useState(false)
+  const [filter, setFilter] = useState('all')
   const [query, setQuery] = useState('')
-  const [oldestFirst, setOldestFirst] = useState(false)
+  const [sort, setSort] = useState('new')
   const [skips, setSkips] = useState({ intro: 0, outro: 0 })
   const [dlMenu, setDlMenu] = useState(false)
   const [dlMsg, setDlMsg] = useState('')
@@ -150,15 +151,13 @@ export default function Shows({ shows, onPlay, queueIds, onToggleQueue, onPlayNe
   }
 
   const needle = query.trim().toLowerCase()
-  const visibleEpisodes = episodes
-    .filter((ep) => !(hidePlayed && ep.completed))
-    .filter(
-      (ep) =>
-        !needle ||
-        (ep.title || '').toLowerCase().includes(needle) ||
-        (ep.description || '').toLowerCase().includes(needle),
-    )
-  if (oldestFirst) visibleEpisodes.reverse()
+  const visibleEpisodes = applyListView(episodes, { filter, sort, query, downloadedIds })
+  const counts = {
+    all: episodes.length,
+    unplayed: episodes.filter((e) => !e.completed).length,
+    progress: episodes.filter((e) => e.position_seconds > 10 && !e.completed).length,
+    downloaded: episodes.filter((e) => downloadedIds.has(e.id)).length,
+  }
 
   if (selected) {
     return (
@@ -186,12 +185,21 @@ export default function Shows({ shows, onPlay, queueIds, onToggleQueue, onPlayNe
           <button className="pill" onClick={refresh} disabled={loading}>
             Refresh
           </button>
-          <button className="pill" onClick={() => setOldestFirst(!oldestFirst)}>
-            {oldestFirst ? 'Oldest first' : 'Newest first'}
-          </button>
-          <button className={`pill${hidePlayed ? ' on' : ''}`} onClick={() => setHidePlayed(!hidePlayed)}>
-            {hidePlayed ? 'Showing unplayed' : 'Hide played'}
-          </button>
+          <label className="pill select-pill">
+            <select value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort episodes">
+              {SORTS.map((s) => (
+                <option key={s.id} value={s.id}>{s.label}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="toolbar filter-row" role="group" aria-label="Filter episodes">
+          {FILTERS.map((f) => (
+            <button key={f.id} className={`pill${filter === f.id ? ' on' : ''}`} onClick={() => setFilter(f.id)}>
+              {f.label}
+              {f.id !== 'all' && <span className="count">{counts[f.id]}</span>}
+            </button>
+          ))}
         </div>
         <div className="toolbar" style={{ marginTop: 8 }}>
           <button className={`pill${dlMenu ? ' on' : ''}`} onClick={() => setDlMenu(!dlMenu)} aria-expanded={dlMenu}>
@@ -248,8 +256,10 @@ export default function Shows({ shows, onPlay, queueIds, onToggleQueue, onPlayNe
         </div>
         {error && <div className="error" style={{ marginTop: 12 }}>{error}</div>}
         {loading && <p className="muted">Loading episodes…</p>}
-        {!loading && needle && visibleEpisodes.length === 0 && (
-          <p className="muted">No episodes match “{query.trim()}”.</p>
+        {!loading && visibleEpisodes.length === 0 && (needle || filter !== 'all') && (
+          <p className="muted">
+            {needle ? `No episodes match “${query.trim()}”.` : 'No episodes in this view.'}
+          </p>
         )}
         {visibleEpisodes.map((ep) => (
           <EpisodeRow

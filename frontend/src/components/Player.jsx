@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import { NativeAudio, applyDrain, toItem } from '../lib/nativeAudio'
 import { adRanges } from '../lib/adChapters'
+import { shareEpisode } from '../lib/share'
 import PlayerView, { SPEEDS } from './PlayerView'
 
 const ERROR_TEXT = {
@@ -234,6 +235,7 @@ export default function Player({ nowPlaying, queue, onNativeChange, onQueueChang
       onRetry={() => NativeAudio.retry().catch(() => {})}
       adToast={adToast}
       onUndoAd={undoAdSkip}
+      onShare={episode ? () => shareEpisode(episode, nowPlaying && nowPlaying.showTitle) : undefined}
       onToggle={() => {
         if (isPlaying) NativeAudio.pause()
         else NativeAudio.play()

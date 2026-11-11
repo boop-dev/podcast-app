@@ -128,6 +128,17 @@ export function normalizeChapters(data) {
     .sort((a, b) => a.start - b.start)
 }
 
+/** The episode's web page, if the feed gives one (not an audio file). */
+function itemLink(item) {
+  const raw = item.link
+  const list = Array.isArray(raw) ? raw : raw ? [raw] : []
+  for (const l of list) {
+    const url = typeof l === 'object' ? (l['@_rel'] === 'enclosure' ? null : l['@_href'] || textOf(l)) : textOf(l)
+    if (url && /^https?:\/\//i.test(url) && !/\.(mp3|m4a|ogg|wav|aac|flac)(\?|$)/i.test(url)) return String(url)
+  }
+  return null
+}
+
 function itemImage(item) {
   const img = item['itunes:image']
   if (img && img['@_href']) return img['@_href']
@@ -152,6 +163,7 @@ function parseRssItems(channel, showId) {
       pub_date: parsePubDate(item.pubDate),
       image_url: itemImage(item),
       chapters_url: itemChaptersUrl(item),
+      link: itemLink(item),
     })
   }
   return episodes
@@ -175,6 +187,7 @@ function parseAtomEntries(feed, showId) {
       pub_date: parsePubDate(entry.published || entry.updated),
       image_url: itemImage(entry),
       chapters_url: itemChaptersUrl(entry),
+      link: itemLink(entry),
     })
   }
   return episodes

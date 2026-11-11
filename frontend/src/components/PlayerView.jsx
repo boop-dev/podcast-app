@@ -52,6 +52,7 @@ export default function PlayerView({
   onRetry,
   adToast = null, // {text} while a "skipped an ad" notice is showing
   onUndoAd,
+  onShare,
 }) {
   const [expanded, setExpanded] = useState(false)
   const [panel, setPanel] = useState(null) // null | 'chapters' | 'notes'
@@ -158,6 +159,11 @@ export default function PlayerView({
           )}
 
           <div className="sheet-extras">
+            {onShare && (
+              <button className="chip" onClick={onShare} title="Share episode">
+                <Icon name="share" size={16} /> Share
+              </button>
+            )}
             {onSkipAhead && (
               <button className="chip" onClick={onSkipAhead} title="Skip ahead (e.g. past an ad)">
                 <Icon name="skipAhead" size={16} /> {formatDuration(skipAhead)}
