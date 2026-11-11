@@ -6,6 +6,8 @@ import { api, isNative } from './api'
 import { App as CapApp } from '@capacitor/app'
 import { syncAll } from './mobile/sync'
 import { handleBack } from './lib/back'
+import { NativeAudio } from './lib/nativeAudio'
+import { refreshFeedWatchList } from './lib/feedWatch'
 import Player from './components/Player'
 import Shows from './components/Shows'
 import SearchView from './components/SearchView'
@@ -88,10 +90,14 @@ export default function App() {
       if (running) return
       running = true
       try {
-        const res = await syncAll()
+        // The background checker may have found new episodes while we were away:
+        // if so, refresh right now instead of waiting for the normal interval.
+        const alerts = await NativeAudio.consumeFeedAlerts().catch(() => ({ count: 0 }))
+        const res = await syncAll({ force: alerts.count > 0 })
         if (res) {
           refreshShows()
           refreshDownloads()
+          refreshFeedWatchList()
         }
       } finally {
         running = false
@@ -102,6 +108,13 @@ export default function App() {
     document.addEventListener('visibilitychange', onVisible)
     return () => document.removeEventListener('visibilitychange', onVisible)
   }, [refreshShows, refreshDownloads])
+
+  // Keep the background checker's feed list current (new subscriptions, etc.).
+  useEffect(() => {
+    if (!isNative()) return undefined
+    const id = setTimeout(refreshFeedWatchList, 1500)
+    return () => clearTimeout(id)
+  }, [shows])
 
   function playEpisode(episode, showTitle = '') {
     setNowPlaying({ episode, showTitle, autoplay: true, token: Date.now() + Math.random() })
@@ -173,7 +186,10 @@ export default function App() {
           onToggleQueue={toggleQueue}
           downloadedIds={downloadedIds}
           onDownloadChanged={refreshDownloads}
-          onRefresh={refreshShows}
+          onRefresh={() => {
+            refreshShows()
+            refreshQueue()
+          }}
         />
       )}
       {view === 'search' && (

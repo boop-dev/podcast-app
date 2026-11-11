@@ -161,6 +161,23 @@ export const mobileApi = {
     return { seen: flagged.length }
   },
 
+  /** Mark every episode of a show played (clears its "new" flags too). */
+  async markShowPlayed(showId) {
+    const episodes = await store.listEpisodesForShow(showId)
+    let changed = 0
+    const cleared = []
+    for (const ep of episodes) {
+      const pos = await store.getPosition(ep.id)
+      if (!(pos && pos.completed)) {
+        await store.savePosition(ep.id, 0, true)
+        changed++
+      }
+      if (ep.is_new) cleared.push({ ...ep, is_new: false })
+    }
+    if (cleared.length) await store.putEpisodes(cleared)
+    return { changed }
+  },
+
   /** Mark one episode played (finished) or unplayed. */
   async setPlayed(episodeId, played) {
     await store.savePosition(episodeId, 0, Boolean(played))

@@ -221,6 +221,21 @@ try {
   check('speed survives other show-setting changes', (await mobileApi.getPlaybackSpeed(sid)) === 1.5 && (await store.getShow(sid)).auto_download === true)
 }
 
+// --- 10. Mark all played ---
+{
+  const sid = (await store.listShows())[0].id
+  const eps = await store.listEpisodesForShow(sid)
+  await store.putEpisodes([{ ...eps[0], is_new: true }])
+  const r = await mobileApi.markShowPlayed(sid)
+  const after = await mobileApi.listEpisodes(sid)
+  check('markShowPlayed marks every episode completed', after.every((e) => e.completed) && r.changed > 0, `changed=${r.changed}`)
+  check('markShowPlayed clears new flags', after.every((e) => !e.is_new))
+  const again = await mobileApi.markShowPlayed(sid)
+  check('markShowPlayed is idempotent', again.changed === 0)
+  await mobileApi.setPlayed(eps[1].id, false)
+  check('episodes can be un-played after mark all', (await mobileApi.getPosition(eps[1].id)).completed === false)
+}
+
 // --- cleanup: delete-show cascade ---
 await mobileApi.deleteShow(show.id)
 check('deleteShow removes show + episodes', (await store.listShows()).length === 0 && (await store.listEpisodesForShow(show.id)).length === 0)

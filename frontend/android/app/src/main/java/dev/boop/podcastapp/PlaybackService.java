@@ -8,6 +8,7 @@ import android.os.Looper;
 
 import androidx.annotation.Nullable;
 import androidx.media3.common.ForwardingPlayer;
+import androidx.media3.common.MediaItem;
 import androidx.media3.common.Player;
 import androidx.media3.session.CommandButton;
 import androidx.media3.session.MediaSession;
@@ -17,6 +18,10 @@ import androidx.media3.session.SessionCommands;
 import androidx.media3.session.SessionResult;
 
 import com.google.common.collect.ImmutableList;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import java.util.ArrayList;
+import java.util.List;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 
@@ -99,6 +104,24 @@ public class PlaybackService extends MediaSessionService {
                         SessionCommands commands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
                                 .add(SEEK_BACK).add(SEEK_FORWARD).build();
                         return MediaSession.ConnectionResult.accept(commands, MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS);
+                    }
+
+                    // A headset / Bluetooth / notification play arriving when the player is empty
+                    // (process was killed): bring back the last playlist at the saved position.
+                    @Override
+                    public ListenableFuture<MediaSession.MediaItemsWithStartPosition> onPlaybackResumption(
+                            MediaSession s, MediaSession.ControllerInfo controllerInfo) {
+                        try {
+                            JSONObject r = controller.resumeData();
+                            if (r == null) throw new IllegalStateException("nothing to resume");
+                            JSONArray arr = r.getJSONArray("items");
+                            List<MediaItem> items = new ArrayList<>();
+                            for (int i = 0; i < arr.length(); i++) items.add(AudioController.buildItem(arr.getJSONObject(i)));
+                            return Futures.immediateFuture(new MediaSession.MediaItemsWithStartPosition(
+                                    items, r.optInt("index", 0), r.optLong("positionMs", 0)));
+                        } catch (Exception e) {
+                            return Futures.immediateFailedFuture(e);
+                        }
                     }
 
                     @Override

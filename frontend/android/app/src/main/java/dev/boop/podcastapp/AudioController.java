@@ -53,6 +53,7 @@ public final class AudioController {
     private static final long SAVE_INTERVAL_MS = 5000;
     private static final String KEY_SKIP_SILENCE = "opt_skip_silence";
     private static final String KEY_BOOST = "opt_boost";
+    private static final String KEY_RESUME = "resume";
     private static final int BOOST_GAIN_MB = 600; // +6 dB for quiet voices
 
     private static AudioController instance;
@@ -248,7 +249,45 @@ public final class AudioController {
     }
 
     /** Remember where the current item is, so JS can pick it up later. */
+    /** Persist the playlist + position so a headset/Bluetooth play can restart it after the process died. */
+    private void persistResume() {
+        int n = player.getMediaItemCount();
+        if (n == 0 || player.getPlaybackState() == Player.STATE_ENDED) return;
+        try {
+            JSONArray items = new JSONArray();
+            for (int i = 0; i < n; i++) {
+                MediaItem it = player.getMediaItemAt(i);
+                MediaMetadata m = it.mediaMetadata;
+                items.put(new JSONObject()
+                        .put("id", it.mediaId)
+                        .put("url", it.localConfiguration == null ? "" : it.localConfiguration.uri.toString())
+                        .put("title", m.title == null ? "" : m.title.toString())
+                        .put("artist", m.artist == null ? "" : m.artist.toString())
+                        .put("artwork", m.artworkUri == null ? "" : m.artworkUri.toString())
+                        .put("speed", m.extras == null ? 1.0 : m.extras.getFloat("speed", 1f)));
+            }
+            prefs.edit().putString(KEY_RESUME, new JSONObject()
+                    .put("items", items)
+                    .put("index", player.getCurrentMediaItemIndex())
+                    .put("positionMs", player.getCurrentPosition()).toString()).apply();
+        } catch (JSONException ignored) {
+        }
+    }
+
+    /** The playlist to restore, or null if there is nothing to resume. */
+    @Nullable
+    public JSONObject resumeData() {
+        String s = prefs.getString(KEY_RESUME, null);
+        if (s == null) return null;
+        try {
+            return new JSONObject(s);
+        } catch (JSONException e) {
+            return null;
+        }
+    }
+
     public void saveNow() {
+        persistResume();
         if (lastId == null || player.getMediaItemCount() == 0) return;
         long pos = player.getCurrentPosition();
         long dur = player.getDuration();

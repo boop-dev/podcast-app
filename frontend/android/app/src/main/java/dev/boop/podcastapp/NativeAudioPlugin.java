@@ -1,7 +1,9 @@
 package dev.boop.podcastapp;
 
+import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 
@@ -12,7 +14,10 @@ import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
+import com.getcapacitor.PermissionState;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -21,7 +26,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /** Bridge between the JS player UI and the native ExoPlayer (see AudioController). */
-@CapacitorPlugin(name = "NativeAudio")
+@CapacitorPlugin(
+        name = "NativeAudio",
+        permissions = {@Permission(strings = {Manifest.permission.POST_NOTIFICATIONS}, alias = "notifications")})
 public class NativeAudioPlugin extends Plugin {
     private final Handler main = new Handler(Looper.getMainLooper());
     private AudioController controller;
@@ -162,6 +169,65 @@ public class NativeAudioPlugin extends Plugin {
             controller.setOptions(call.getBoolean("skipSilence", false), call.getBoolean("boost", false));
             call.resolve(JSObject.fromJSONObject(controller.options()));
         });
+    }
+
+    // --- background new-episode check ------------------------------------
+
+    private boolean notificationsGranted() {
+        return Build.VERSION.SDK_INT < 33 || getPermissionState("notifications") == PermissionState.GRANTED;
+    }
+
+    @PluginMethod
+    public void requestNotificationPermission(PluginCall call) {
+        if (notificationsGranted()) {
+            JSObject o = new JSObject();
+            o.put("granted", true);
+            call.resolve(o);
+        } else {
+            requestPermissionForAlias("notifications", call, "notificationPermissionResult");
+        }
+    }
+
+    @PermissionCallback
+    private void notificationPermissionResult(PluginCall call) {
+        JSObject o = new JSObject();
+        o.put("granted", notificationsGranted());
+        call.resolve(o);
+    }
+
+    @PluginMethod
+    public void getFeedWatch(PluginCall call) {
+        try {
+            JSObject o = JSObject.fromJSONObject(FeedWatch.settings(getContext()));
+            o.put("notificationsGranted", notificationsGranted());
+            call.resolve(o);
+        } catch (Exception e) {
+            call.reject(String.valueOf(e.getMessage()), e);
+        }
+    }
+
+    @PluginMethod
+    public void setFeedWatch(PluginCall call) {
+        try {
+            FeedWatch.configure(getContext().getApplicationContext(), call.getBoolean("enabled", false),
+                    call.getInt("intervalHours", 3), call.getArray("feeds"));
+            call.resolve(JSObject.fromJSONObject(FeedWatch.settings(getContext())));
+        } catch (Exception e) {
+            call.reject(String.valueOf(e.getMessage()), e);
+        }
+    }
+
+    @PluginMethod
+    public void checkFeedsNow(PluginCall call) {
+        FeedWatch.checkNow(getContext().getApplicationContext());
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void consumeFeedAlerts(PluginCall call) {
+        JSObject o = new JSObject();
+        o.put("count", FeedWatch.consumeAlerts(getContext()));
+        call.resolve(o);
     }
 
     @PluginMethod

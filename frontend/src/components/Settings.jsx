@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api'
 import { NativeAudio } from '../lib/nativeAudio'
+import { configureFeedWatch } from '../lib/feedWatch'
 
 function formatBytes(n) {
   if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`
@@ -14,6 +15,38 @@ export default function Settings({ onChanged }) {
   const [usage, setUsage] = useState(null)
   const [msg, setMsg] = useState('')
   const [options, setOptions] = useState({ skipSilence: false, boost: false })
+  const [watch, setWatch] = useState({ enabled: false, intervalHours: 3 })
+
+  useEffect(() => {
+    NativeAudio.getFeedWatch()
+      .then((s) => setWatch({ enabled: s.enabled, intervalHours: s.intervalHours }))
+      .catch(() => {})
+  }, [])
+
+  async function toggleWatch() {
+    if (!watch.enabled) {
+      const { granted } = await NativeAudio.requestNotificationPermission()
+      if (!granted) {
+        setMsg('Allow notifications for Podcast App in Android settings to get new-episode alerts.')
+        return
+      }
+    }
+    const next = { ...watch, enabled: !watch.enabled }
+    setWatch(next)
+    configureFeedWatch(next).catch(() => setWatch(watch))
+  }
+
+  function changeInterval(hours) {
+    const next = { ...watch, intervalHours: hours }
+    setWatch(next)
+    if (watch.enabled) configureFeedWatch(next).catch(() => {})
+  }
+
+  async function checkNow() {
+    setMsg('Checking your feeds in the background. You will get a notification if anything is new.')
+    await configureFeedWatch(watch).catch(() => {})
+    NativeAudio.checkFeedsNow().catch(() => {})
+  }
 
   useEffect(() => {
     NativeAudio.getOptions().then(setOptions).catch(() => {})
@@ -87,6 +120,31 @@ export default function Settings({ onChanged }) {
         </span>
         <input type="checkbox" checked={options.boost} onChange={() => changeOption('boost')} />
       </label>
+
+      <h2 className="section">New episodes</h2>
+      <label className="setting-row">
+        <span>
+          Alert me about new episodes
+          <small>Checks your feeds in the background and sends a notification.</small>
+        </span>
+        <input type="checkbox" checked={watch.enabled} onChange={toggleWatch} />
+      </label>
+      {watch.enabled && (
+        <div className="setting-row">
+          <span>Check every</span>
+          <select value={watch.intervalHours} onChange={(e) => changeInterval(Number(e.target.value))}>
+            <option value={1}>hour</option>
+            <option value={3}>3 hours</option>
+            <option value={6}>6 hours</option>
+            <option value={12}>12 hours</option>
+          </select>
+        </div>
+      )}
+      {watch.enabled && (
+        <button className="pill" onClick={checkNow}>
+          Check now
+        </button>
+      )}
 
       <h2 className="section">Downloads</h2>
       {usage === null ? (

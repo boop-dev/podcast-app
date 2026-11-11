@@ -35,6 +35,20 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ position: 0, duration: null, completed: Boolean(played) }),
     }),
+  markShowPlayed: async (showId) => {
+    const episodes = await request(`/api/shows/${showId}/episodes`)
+    let changed = 0
+    for (const ep of episodes) {
+      if (!ep.completed) {
+        await request(`/api/episodes/${ep.id}/position`, {
+          method: 'POST',
+          body: JSON.stringify({ position: 0, duration: null, completed: true }),
+        })
+        changed++
+      }
+    }
+    return { changed }
+  },
   markShowSeen: async () => ({ seen: 0 }), // "new" tracking is native-only
 
   getChapters: async () => [], // chapters are native-app only

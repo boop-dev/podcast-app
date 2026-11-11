@@ -13,6 +13,8 @@ export default function Shows({ shows, onPlay, queueIds, onToggleQueue, download
   const [error, setError] = useState('')
   const [opmlMsg, setOpmlMsg] = useState('')
   const [hidePlayed, setHidePlayed] = useState(false)
+  const [query, setQuery] = useState('')
+  const [oldestFirst, setOldestFirst] = useState(false)
 
   // On native there is no backend /api/opml: build the file on-device
   // instead and tell the user where it landed.
@@ -70,6 +72,37 @@ export default function Shows({ shows, onPlay, queueIds, onToggleQueue, download
     onRefresh()
   }
 
+  async function markAllPlayed() {
+    if (!window.confirm(`Mark every episode of ${selected.title} as played?`)) return
+    setLoading(true)
+    try {
+      const res = await api.markShowPlayed(selected.id)
+      setEpisodes(await api.listEpisodes(selected.id))
+      onRefresh()
+      setError(res.changed ? `Marked ${res.changed} episodes as played.` : 'Everything was already played.')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function unsubscribe() {
+    const ok = window.confirm(
+      `Unsubscribe from ${selected.title}?\n\nIts episodes, listening progress and downloads on this device will be removed.`,
+    )
+    if (!ok) return
+    try {
+      await api.deleteShow(selected.id)
+      setSelected(null)
+      setEpisodes([])
+      onRefresh()
+      onDownloadChanged()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
   async function toggleAutoDownload() {
     const enabled = !selected.auto_download
     await api.setAutoDownload(selected.id, enabled)
@@ -93,6 +126,17 @@ export default function Shows({ shows, onPlay, queueIds, onToggleQueue, download
     }
   }
 
+  const needle = query.trim().toLowerCase()
+  const visibleEpisodes = episodes
+    .filter((ep) => !(hidePlayed && ep.completed))
+    .filter(
+      (ep) =>
+        !needle ||
+        (ep.title || '').toLowerCase().includes(needle) ||
+        (ep.description || '').toLowerCase().includes(needle),
+    )
+  if (oldestFirst) visibleEpisodes.reverse()
+
   if (selected) {
     return (
       <div>
@@ -107,9 +151,20 @@ export default function Shows({ shows, onPlay, queueIds, onToggleQueue, download
             <p className="muted">{episodes.length} episodes</p>
           </div>
         </div>
+        <input
+          type="search"
+          className="episode-search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search episodes…"
+          aria-label="Search episodes"
+        />
         <div className="toolbar">
           <button className="pill" onClick={refresh} disabled={loading}>
-            Check for new
+            Refresh
+          </button>
+          <button className="pill" onClick={() => setOldestFirst(!oldestFirst)}>
+            {oldestFirst ? 'Oldest first' : 'Newest first'}
           </button>
           <button className={`pill${hidePlayed ? ' on' : ''}`} onClick={() => setHidePlayed(!hidePlayed)}>
             {hidePlayed ? 'Showing unplayed' : 'Hide played'}
@@ -124,9 +179,20 @@ export default function Shows({ shows, onPlay, queueIds, onToggleQueue, download
             <input type="checkbox" checked={Boolean(selected.auto_download)} onChange={toggleAutoDownload} />
           </label>
         )}
+        <div className="toolbar" style={{ marginTop: 8 }}>
+          <button className="pill" onClick={markAllPlayed} disabled={loading}>
+            Mark all played
+          </button>
+          <button className="pill danger" onClick={unsubscribe}>
+            Unsubscribe
+          </button>
+        </div>
         {error && <div className="error" style={{ marginTop: 12 }}>{error}</div>}
         {loading && <p className="muted">Loading episodes…</p>}
-        {episodes.filter((ep) => !(hidePlayed && ep.completed)).map((ep) => (
+        {!loading && needle && visibleEpisodes.length === 0 && (
+          <p className="muted">No episodes match “{query.trim()}”.</p>
+        )}
+        {visibleEpisodes.map((ep) => (
           <EpisodeRow
             key={ep.id}
             episode={ep}
