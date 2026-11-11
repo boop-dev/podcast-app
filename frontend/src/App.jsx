@@ -16,6 +16,7 @@ import QueueView from './components/QueueView'
 import Home from './components/Home'
 import Settings from './components/Settings'
 import Icon from './components/Icon'
+import EpisodeDetail from './components/EpisodeDetail'
 
 const TITLES = {
   home: 'Home',
@@ -210,6 +211,14 @@ export default function App() {
       {view === 'queue' && (
         <QueueView queue={queue} onPlay={playEpisode} onQueueChanged={refreshQueue} />
       )}
+
+      <EpisodeDetail
+        onPlay={playEpisode}
+        onToggleQueue={toggleQueue}
+        onPlayNext={playNext}
+        queueIds={new Set(queue.map((ep) => ep.id))}
+        downloadedIds={downloadedIds}
+      />
 
       <Player
         nowPlaying={nowPlaying}

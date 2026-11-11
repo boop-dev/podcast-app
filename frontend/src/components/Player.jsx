@@ -189,6 +189,13 @@ export default function Player({ nowPlaying, queue, onNativeChange, onQueueChang
     NativeAudio.setSkipRanges({ id: episodeId, ranges }).catch(() => {})
   }, [episodeId, chapters, durationMs, adSwitch])
 
+  // Chapter titles go to the native side so the notification / lock screen can show them.
+  useEffect(() => {
+    if (!episodeId) return
+    const list = chapters.map((c) => ({ startMs: Math.round(c.start * 1000), title: c.title || '' }))
+    NativeAudio.setChapters({ id: episodeId, chapters: list }).catch(() => {})
+  }, [episodeId, chapters])
+
   function undoAdSkip() {
     if (!adToast) return
     undone.current.add(adToast.startMs)

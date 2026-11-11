@@ -177,6 +177,14 @@ public class NativeAudioPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void setChapters(PluginCall call) {
+        onMain(call, () -> {
+            controller.setChapters(call.getString("id"), call.getArray("chapters"));
+            call.resolve();
+        });
+    }
+
+    @PluginMethod
     public void retry(PluginCall call) {
         onMain(call, () -> {
             controller.retry();

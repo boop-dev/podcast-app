@@ -43,7 +43,7 @@ Effort: **S** under an hour, **M** a session, **L** a multi-step project.
 - [x] Move to top / move to bottom — S
 - [x] Clear queue, with confirmation — S
 - [x] Playing an episode from the queue removes it from the queue — S
-- [ ] Swipe to remove — M
+- [x] Swipe to remove — M
 
 ## Branding
 
@@ -73,7 +73,7 @@ and decide on detection only after a feasibility spike.
 - [x] Finer speed control (0.05x steps) — S
 - [x] Buffering and error states in the player (spinner, message, retry) — S
 - [x] Chapter artwork in the player — S
-- [ ] Current chapter in the lock-screen / notification card — M
+- [x] Current chapter in the lock-screen / notification card — M
 
 ## Library and discovery
 
@@ -81,7 +81,7 @@ and decide on detection only after a feasibility spike.
 - [x] Search across all episodes — M
 - [x] Sort / filter by duration, downloaded, unplayed — S
 - [x] Search tab: mark already-subscribed shows, show genre / episode count / latest release — S
-- [ ] Episode detail page — M
+- [x] Episode detail page — M
 - [x] Share episode link — S
 - [ ] Listening stats (time per show / week) — M
 

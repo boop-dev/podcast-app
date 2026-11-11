@@ -6,6 +6,7 @@ import { api } from '../api'
 import Icon from './Icon'
 import { downloadEpisode, removeDownload } from '../lib/downloads'
 import { removeJob, retryJob, useDownloadJob } from '../lib/downloadManager'
+import { openEpisodeDetail } from '../lib/episodeDetail'
 
 export function formatDuration(totalSeconds) {
   if (totalSeconds === null || totalSeconds === undefined) return ''
@@ -63,17 +64,20 @@ export default function EpisodeRow({ episode, onPlay, inQueue, onToggleQueue, on
 
   return (
     <article className={`episode${episode.completed ? ' played' : ''}`}>
-      <h4>
-        {episode.is_new && <span className="new-tag">NEW</span>}
-        {episode.title}
-      </h4>
-      <div className="meta">
-        {formatDate(episode.pub_date)}
-        {episode.duration_seconds ? ` · ${formatDuration(episode.duration_seconds)}` : ''}
-        {episode.completed ? ' · Finished' : ''}
-        {downloaded ? ' · Downloaded' : ''}
+      <div className="episode-tap" role="button" tabIndex={0} onClick={() => openEpisodeDetail(episode)}
+        onKeyDown={(e) => e.key === 'Enter' && openEpisodeDetail(episode)}>
+        <h4>
+          {episode.is_new && <span className="new-tag">NEW</span>}
+          {episode.title}
+        </h4>
+        <div className="meta">
+          {formatDate(episode.pub_date)}
+          {episode.duration_seconds ? ` · ${formatDuration(episode.duration_seconds)}` : ''}
+          {episode.completed ? ' · Finished' : ''}
+          {downloaded ? ' · Downloaded' : ''}
+        </div>
+        {episode.description && <p className="desc">{stripHtml(episode.description)}</p>}
       </div>
-      {episode.description && <p className="desc">{stripHtml(episode.description)}</p>}
       <div className="actions">
         <button className="pill primary" onClick={() => onPlay(episode)}>
           <Icon name="play" size={16} />

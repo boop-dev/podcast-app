@@ -91,6 +91,10 @@ public final class AudioController {
     private final Context appContext;
     private final SharedPreferences prefs;
     private boolean sleepShake = true;
+    @Nullable private String chaptersId = null;   // episode the chapter list below belongs to
+    private long[] chapterStarts = new long[0];
+    private String[] chapterTitles = new String[0];
+    private int shownChapter = -2;                // chapter index currently in the notification
     private boolean shaking = false;
     private final Handler main = new Handler(Looper.getMainLooper());
 
@@ -227,6 +231,12 @@ public final class AudioController {
 
             @Override
             public void onMediaItemTransition(@Nullable MediaItem item, int reason) {
+                // A chapter-title refresh swaps the item's metadata in place: nothing else changed.
+                if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED && item != null
+                        && item.mediaMetadata.extras != null && item.mediaMetadata.extras.getBoolean("refresh")) {
+                    return;
+                }
+                shownChapter = -2;
                 // Each show can have its own playback speed: apply the new item's.
                 if (item != null && item.mediaMetadata.extras != null
                         && item.mediaMetadata.extras.containsKey("speed")) {
@@ -404,11 +414,50 @@ public final class AudioController {
         }
     }
 
+    /** Chapter starts (ms) and titles for the episode that is loaded; set by JS once it has them. */
+    public void setChapters(String id, JSONArray arr) throws JSONException {
+        chaptersId = id;
+        chapterStarts = new long[arr == null ? 0 : arr.length()];
+        chapterTitles = new String[chapterStarts.length];
+        for (int i = 0; i < chapterStarts.length; i++) {
+            JSONObject o = arr.getJSONObject(i);
+            chapterStarts[i] = o.getLong("startMs");
+            chapterTitles[i] = o.optString("title", "");
+        }
+        shownChapter = -2; // force a refresh on the next look
+        MediaItem item = player.getCurrentMediaItem();
+        if (item != null) showChapter(item, player.getCurrentPosition());
+    }
+
+    /**
+     * Put the current chapter's title in the notification / lock-screen card, by
+     * swapping the item's artist line. ExoPlayer treats a metadata-only change as
+     * an in-place update, so playback is not interrupted.
+     */
+    private void showChapter(MediaItem item, long pos) {
+        if (chaptersId == null || !chaptersId.equals(item.mediaId)) return;
+        int idx = -1;
+        for (int i = 0; i < chapterStarts.length; i++) if (chapterStarts[i] <= pos) idx = i;
+        if (idx == shownChapter) return;
+        shownChapter = idx;
+        Bundle extras = item.mediaMetadata.extras == null ? new Bundle() : new Bundle(item.mediaMetadata.extras);
+        String base = extras.getString("baseArtist", item.mediaMetadata.artist == null ? "" : item.mediaMetadata.artist.toString());
+        String title = idx >= 0 ? chapterTitles[idx] : "";
+        extras.putBoolean("refresh", true); // lets onMediaItemTransition ignore this metadata-only update
+        MediaItem updated = item.buildUpon().setMediaMetadata(item.mediaMetadata.buildUpon()
+                .setArtist(title.isEmpty() ? base : title + " · " + base)
+                .setExtras(extras).build()).build();
+        player.replaceMediaItem(player.getCurrentMediaItemIndex(), updated);
+    }
+
     private void tick() {
         MediaItem item = player.getCurrentMediaItem();
         if (item == null || lastId == null) return;
         long pos = player.getCurrentPosition();
         long dur = player.getDuration();
+        showChapter(item, pos);
+        item = player.getCurrentMediaItem(); // may have just been refreshed
+        if (item == null) return;
         if (skipAdChapters) {
             List<long[]> list = ranges.get(lastId);
             if (list != null) {
@@ -513,7 +562,9 @@ public final class AudioController {
                         .put("id", it.mediaId)
                         .put("url", it.localConfiguration == null ? "" : it.localConfiguration.uri.toString())
                         .put("title", m.title == null ? "" : m.title.toString())
-                        .put("artist", m.artist == null ? "" : m.artist.toString())
+                        .put("artist", m.extras != null && m.extras.containsKey("baseArtist")
+                                ? m.extras.getString("baseArtist", "") // not the chapter-decorated line
+                                : m.artist == null ? "" : m.artist.toString())
                         .put("artwork", m.artworkUri == null ? "" : m.artworkUri.toString())
                         .put("speed", m.extras == null ? 1.0 : m.extras.getFloat("speed", 1f))
                         .put("introMs", m.extras == null ? 0 : m.extras.getLong("introMs", 0))
@@ -603,6 +654,7 @@ public final class AudioController {
         extras.putFloat("speed", (float) o.optDouble("speed", 1.0));
         extras.putLong("introMs", o.optLong("introMs", 0));
         extras.putLong("outroMs", o.optLong("outroMs", 0));
+        extras.putString("baseArtist", o.optString("artist"));
         meta.setExtras(extras);
         return new MediaItem.Builder()
                 .setMediaId(o.getString("id"))
