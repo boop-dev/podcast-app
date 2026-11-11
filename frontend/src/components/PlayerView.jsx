@@ -5,9 +5,10 @@
 import { useState } from 'react'
 import { useBackHandler } from '../lib/back'
 import Icon from './Icon'
+import { ChapterList, ShowNotes, currentChapter } from './PlayerPanels'
 import { formatDuration } from './EpisodeRow'
 
-export const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2]
+export const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2, 2.5]
 export const SLEEP_OPTIONS = [
   { label: 'Off', value: '0' },
   { label: '5 min', value: '5' },
@@ -40,12 +41,18 @@ export default function PlayerView({
   onSeek,
   onCycleSpeed,
   onSleepChange,
+  chapters = [],
+  description = null,
 }) {
   const [expanded, setExpanded] = useState(false)
+  const [panel, setPanel] = useState(null) // null | 'chapters' | 'notes'
   useBackHandler(expanded, () => setExpanded(false))
 
   if (!episode) return null
   const pct = duration ? Math.min((current / duration) * 100, 100) : 0
+  const chapter = currentChapter(chapters, current)
+  const showChapters = chapters.length > 0
+  const activePanel = panel === 'chapters' && !showChapters ? null : panel
 
   return (
     <>
@@ -83,6 +90,7 @@ export default function PlayerView({
           <div className="sheet-info">
             <h2>{episode.title}</h2>
             <p className="muted">{title}</p>
+            {chapter && chapter.title && <p className="now-chapter">{chapter.title}</p>}
           </div>
 
           <div className="seek">
@@ -132,6 +140,25 @@ export default function PlayerView({
               )}
             </label>
           </div>
+
+          <div className="panel-tabs">
+            {showChapters && (
+              <button
+                className={activePanel === 'chapters' ? 'on' : ''}
+                onClick={() => setPanel(activePanel === 'chapters' ? null : 'chapters')}
+              >
+                Chapters ({chapters.length})
+              </button>
+            )}
+            <button
+              className={activePanel === 'notes' ? 'on' : ''}
+              onClick={() => setPanel(activePanel === 'notes' ? null : 'notes')}
+            >
+              Show notes
+            </button>
+          </div>
+          {activePanel === 'chapters' && <ChapterList chapters={chapters} current={current} onSeek={onSeek} />}
+          {activePanel === 'notes' && <ShowNotes html={description} onSeek={onSeek} />}
         </div>
       )}
     </>

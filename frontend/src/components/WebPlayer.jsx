@@ -14,6 +14,7 @@ export default function WebPlayer({ episode, showTitle, autoplay, onEnded }) {
   const [sleepValue, setSleepValue] = useState('0')
   const [sleepLeft, setSleepLeft] = useState(null)
   const [time, setTime] = useState({ current: 0, duration: 0 })
+  const showId = episode ? episode.show_id : null
   const sleepTimer = useRef(null)
   const sleepCountdown = useRef(null)
   const lastSaved = useRef(0)
@@ -51,6 +52,11 @@ export default function WebPlayer({ episode, showTitle, autoplay, onEnded }) {
       cancelled = true
     }
   }, [episode, autoplay])
+
+  // Each show remembers its own speed.
+  useEffect(() => {
+    if (showId) api.getPlaybackSpeed(showId).then(setSpeed).catch(() => {})
+  }, [showId])
 
   useEffect(() => {
     if (audioRef.current) audioRef.current.playbackRate = speed
@@ -139,7 +145,12 @@ export default function WebPlayer({ episode, showTitle, autoplay, onEnded }) {
           if (audioRef.current) audioRef.current.currentTime = t
           setTime((prev) => ({ ...prev, current: t }))
         }}
-        onCycleSpeed={() => setSpeed(SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length])}
+        onCycleSpeed={() => {
+          const next = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length]
+          setSpeed(next)
+          if (showId) api.setPlaybackSpeed(showId, next).catch(() => {})
+        }}
+        description={episode ? episode.description : null}
         onSleepChange={setSleepValue}
       />
     </>

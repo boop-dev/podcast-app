@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api'
+import { NativeAudio } from '../lib/nativeAudio'
 
 function formatBytes(n) {
   if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`
@@ -12,6 +13,17 @@ function formatBytes(n) {
 export default function Settings({ onChanged }) {
   const [usage, setUsage] = useState(null)
   const [msg, setMsg] = useState('')
+  const [options, setOptions] = useState({ skipSilence: false, boost: false })
+
+  useEffect(() => {
+    NativeAudio.getOptions().then(setOptions).catch(() => {})
+  }, [])
+
+  function changeOption(key) {
+    const next = { ...options, [key]: !options[key] }
+    setOptions(next)
+    NativeAudio.setOptions(next).catch(() => setOptions(options))
+  }
 
   const load = useCallback(() => {
     api.storageUsage().then(setUsage).catch((err) => setMsg(err.message))
@@ -60,6 +72,22 @@ export default function Settings({ onChanged }) {
 
   return (
     <div>
+      <h2 className="section">Playback</h2>
+      <label className="setting-row">
+        <span>
+          Trim silence
+          <small>Shortens long pauses in speech.</small>
+        </span>
+        <input type="checkbox" checked={options.skipSilence} onChange={() => changeOption('skipSilence')} />
+      </label>
+      <label className="setting-row">
+        <span>
+          Boost voices
+          <small>Louder output for quiet recordings.</small>
+        </span>
+        <input type="checkbox" checked={options.boost} onChange={() => changeOption('boost')} />
+      </label>
+
       <h2 className="section">Downloads</h2>
       {usage === null ? (
         <p className="muted">Measuring…</p>

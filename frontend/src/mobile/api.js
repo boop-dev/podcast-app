@@ -23,7 +23,7 @@
 import { Capacitor, CapacitorHttp } from '@capacitor/core'
 import { Directory, Filesystem } from '@capacitor/filesystem'
 import { buildOpmlXml, parseOpmlFeedUrls } from './opml.js'
-import { fetchFeed, httpGetJson } from './rss.js'
+import { fetchFeed, httpGetJson, normalizeChapters } from './rss.js'
 import * as store from './store.js'
 
 const ITUNES_SEARCH_URL = 'https://itunes.apple.com/search'
@@ -45,6 +45,18 @@ async function withState(ep) {
     in_queue: queueOrder.includes(ep.id),
     downloaded: Boolean(download),
   }
+}
+
+// Episodes stored before chapter support have no chapters_url: fill it in
+// from the fresh feed (never touching anything else about them).
+async function backfillChapterUrls(stored, incoming) {
+  const byId = new Map(stored.map((ep) => [ep.id, ep]))
+  const updates = []
+  for (const ep of incoming) {
+    const old = byId.get(ep.id)
+    if (old && !old.chapters_url && ep.chapters_url) updates.push({ ...old, chapters_url: ep.chapters_url })
+  }
+  if (updates.length) await store.putEpisodes(updates)
 }
 
 // Once an episode of an auto-download show is finished, free its file.
@@ -81,10 +93,11 @@ export const mobileApi = {
     if (!url) throw new Error('feedUrl is required')
     const { show, episodes } = await fetchFeed(url)
     const existing = await store.getShow(show.id)
-    await store.putShow(show)
+    await store.putShow({ ...(existing || {}), ...show }) // keep per-show settings
     // Insert new episodes only; never clobber a stored episode's id.
     const stored = await store.listEpisodesForShow(show.id)
     const known = new Set(stored.map((ep) => ep.id))
+    await backfillChapterUrls(stored, episodes)
     // First subscribe: the back catalogue is not "new". Re-subscribe: it is.
     const fresh = episodes
       .filter((ep) => !known.has(ep.id))
@@ -128,6 +141,7 @@ export const mobileApi = {
     await store.putShow({ ...show, ...freshShow, id: showId, auto_download: show.auto_download })
     const stored = await store.listEpisodesForShow(showId)
     const known = new Set(stored.map((ep) => ep.id))
+    await backfillChapterUrls(stored, episodes)
     const fresh = episodes
       .filter((ep) => !known.has(ep.id))
       .map((ep) => ({ ...ep, is_new: true }))
@@ -154,6 +168,33 @@ export const mobileApi = {
     if (ep && ep.is_new) await store.putEpisodes([{ ...ep, is_new: false }])
     if (played) await deleteDownloadIfAuto(ep)
     return { completed: Boolean(played) }
+  },
+
+  /** Chapters for an episode ([] if it has none). Fetched once, then cached. */
+  async getChapters(episodeId) {
+    const ep = await store.getEpisode(episodeId)
+    if (!ep) return []
+    if (Array.isArray(ep.chapters)) return ep.chapters
+    if (!ep.chapters_url) return []
+    try {
+      const chapters = normalizeChapters(await httpGetJson(ep.chapters_url))
+      await store.putEpisodes([{ ...ep, chapters }])
+      return chapters
+    } catch {
+      return [] // offline or bad file: try again next time
+    }
+  },
+
+  async getPlaybackSpeed(showId) {
+    const show = await store.getShow(showId)
+    return (show && show.playback_speed) || 1
+  },
+
+  async setPlaybackSpeed(showId, speed) {
+    const show = await store.getShow(showId)
+    if (!show) return { playback_speed: speed }
+    await store.putShow({ ...show, playback_speed: speed })
+    return { playback_speed: speed }
   },
 
   async setAutoDownload(showId, enabled) {

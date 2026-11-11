@@ -37,6 +37,23 @@ export const api = {
     }),
   markShowSeen: async () => ({ seen: 0 }), // "new" tracking is native-only
 
+  getChapters: async () => [], // chapters are native-app only
+  getPlaybackSpeed: async (showId) => {
+    try {
+      return Number(localStorage.getItem(`speed:${showId}`)) || 1
+    } catch {
+      return 1
+    }
+  },
+  setPlaybackSpeed: async (showId, speed) => {
+    try {
+      localStorage.setItem(`speed:${showId}`, String(speed))
+    } catch {
+      /* ignore */
+    }
+    return { playback_speed: speed }
+  },
+
   listQueue: () => request('/api/queue'),
   addToQueue: (episodeId) =>
     request('/api/queue', { method: 'POST', body: JSON.stringify({ episodeId }) }),

@@ -16,6 +16,7 @@ const DRAIN_EVERY = 10 // polls
 export default function NativePlayer({ nowPlaying, queue, onNativeChange, onQueueChanged }) {
   const [snap, setSnap] = useState(null)
   const [sleepChoice, setSleepChoice] = useState('0')
+  const [chapters, setChapters] = useState([])
   const [, setTick] = useState(0)
 
   const episode = nowPlaying ? nowPlaying.episode : null
@@ -49,7 +50,7 @@ export default function NativePlayer({ nowPlaying, queue, onNativeChange, onQueu
           upNext,
           startPositionMs: resume ? Math.round(pos.position_seconds * 1000) : 0,
           autoplay: nowPlaying.autoplay,
-          speed: 1,
+          speed: await api.getPlaybackSpeed(ep.show_id).catch(() => 1),
         })
       } catch (err) {
         console.error('NativeAudio.load failed', err)
@@ -126,6 +127,20 @@ export default function NativePlayer({ nowPlaying, queue, onNativeChange, onQueu
     }
   }, [queue, currentId, hasMedia])
 
+  // Chapters for the current episode (fetched once, then cached on-device).
+  useEffect(() => {
+    setChapters([])
+    if (!episodeId) return undefined
+    let cancelled = false
+    api
+      .getChapters(episodeId)
+      .then((c) => !cancelled && setChapters(c))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [episodeId])
+
   // The sleep countdown ticks once a second while a timer runs.
   const sleepActive = snap && snap.sleepEndsAt > 0
   useEffect(() => {
@@ -152,6 +167,8 @@ export default function NativePlayer({ nowPlaying, queue, onNativeChange, onQueu
       speed={speed}
       sleepValue={sleepValue}
       sleepLeft={sleepLeft}
+      chapters={chapters}
+      description={episode ? episode.description : null}
       onToggle={() => {
         if (isPlaying) NativeAudio.pause()
         else NativeAudio.play()
@@ -166,6 +183,7 @@ export default function NativePlayer({ nowPlaying, queue, onNativeChange, onQueu
         const next = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length]
         NativeAudio.setSpeed({ speed: next })
         patch({ speed: next })
+        if (episode) api.setPlaybackSpeed(episode.show_id, next).catch(() => {}) // remembered per show
       }}
       onSleepChange={(v) => {
         setSleepChoice(v)

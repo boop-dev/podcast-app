@@ -2,7 +2,9 @@ package dev.boop.podcastapp;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.media.audiofx.LoudnessEnhancer;
 import android.net.Uri;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 
@@ -49,6 +51,9 @@ public final class AudioController {
     private static final String KEY_DIRTY = "dirty";
     private static final String KEY_CONSUMED = "consumed";
     private static final long SAVE_INTERVAL_MS = 5000;
+    private static final String KEY_SKIP_SILENCE = "opt_skip_silence";
+    private static final String KEY_BOOST = "opt_boost";
+    private static final int BOOST_GAIN_MB = 600; // +6 dB for quiet voices
 
     private static AudioController instance;
 
@@ -66,6 +71,9 @@ public final class AudioController {
     private JSONObject dirty = new JSONObject();      // id -> {positionMs, durationMs, completed}
     private JSONArray consumed = new JSONArray();     // ids that auto-started from the up-next list
     private String lastId = null;
+    private boolean skipSilence = false;
+    private boolean boost = false;
+    @Nullable private LoudnessEnhancer enhancer;
     private long sleepEndsAt = 0;
     private boolean sleepEndOfEpisode = false;
     @Nullable private Listener listener;
@@ -120,9 +128,23 @@ public final class AudioController {
                 .setSeekForwardIncrementMs(30_000)
                 .build();
 
+        skipSilence = prefs.getBoolean(KEY_SKIP_SILENCE, false);
+        boost = prefs.getBoolean(KEY_BOOST, false);
+        player.setSkipSilenceEnabled(skipSilence);
+
         player.addListener(new Player.Listener() {
             @Override
+            public void onAudioSessionIdChanged(int audioSessionId) {
+                applyBoost();
+            }
+
+            @Override
             public void onMediaItemTransition(@Nullable MediaItem item, int reason) {
+                // Each show can have its own playback speed: apply the new item's.
+                if (item != null && item.mediaMetadata.extras != null
+                        && item.mediaMetadata.extras.containsKey("speed")) {
+                    player.setPlaybackSpeed(item.mediaMetadata.extras.getFloat("speed", 1f));
+                }
                 String newId = item == null ? null : item.mediaId;
                 if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO && lastId != null) {
                     recordCompleted(lastId);
@@ -168,6 +190,44 @@ public final class AudioController {
                 notifyChange();
             }
         });
+    }
+
+    /** (Re)attach the volume booster to the player's current audio session. */
+    private void applyBoost() {
+        if (enhancer != null) {
+            try {
+                enhancer.release();
+            } catch (RuntimeException ignored) {
+            }
+            enhancer = null;
+        }
+        int id = player.getAudioSessionId();
+        if (!boost || id == C.AUDIO_SESSION_ID_UNSET || id == 0) return;
+        try {
+            enhancer = new LoudnessEnhancer(id);
+            enhancer.setTargetGain(BOOST_GAIN_MB);
+            enhancer.setEnabled(true);
+        } catch (RuntimeException e) {
+            enhancer = null; // device without the effect: playback is unaffected
+        }
+    }
+
+    public void setOptions(boolean skipSilence, boolean boost) {
+        this.skipSilence = skipSilence;
+        this.boost = boost;
+        prefs.edit().putBoolean(KEY_SKIP_SILENCE, skipSilence).putBoolean(KEY_BOOST, boost).apply();
+        player.setSkipSilenceEnabled(skipSilence);
+        applyBoost();
+    }
+
+    public JSONObject options() {
+        JSONObject o = new JSONObject();
+        try {
+            o.put("skipSilence", skipSilence);
+            o.put("boost", boost);
+        } catch (JSONException ignored) {
+        }
+        return o;
     }
 
     public void setListener(@Nullable Listener l) {
@@ -247,6 +307,9 @@ public final class AudioController {
                 .setAlbumTitle(o.optString("artist"));
         String art = o.optString("artwork", "");
         if (!art.isEmpty() && art.startsWith("http")) meta.setArtworkUri(Uri.parse(art));
+        Bundle extras = new Bundle();
+        extras.putFloat("speed", (float) o.optDouble("speed", 1.0));
+        meta.setExtras(extras);
         return new MediaItem.Builder()
                 .setMediaId(o.getString("id"))
                 .setUri(Uri.parse(o.getString("url")))

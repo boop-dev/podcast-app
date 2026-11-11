@@ -106,6 +106,28 @@ function findAudioUrl(item) {
   return null
 }
 
+/** Podcasting 2.0 chapters: <podcast:chapters url="..." type="application/json+chapters"/> */
+function itemChaptersUrl(item) {
+  const node = item['podcast:chapters']
+  const first = Array.isArray(node) ? node[0] : node
+  const url = first && typeof first === 'object' ? first['@_url'] : null
+  return url && /^https?:\/\//i.test(url) ? String(url) : null
+}
+
+/** Normalise a chapters JSON document ({chapters:[{startTime,title,img}]}) to
+ *  [{start, title, image}] sorted by start. Skips hidden (toc:false) entries. */
+export function normalizeChapters(data) {
+  const list = data && Array.isArray(data.chapters) ? data.chapters : []
+  return list
+    .filter((c) => c && c.toc !== false && Number.isFinite(Number(c.startTime)))
+    .map((c) => ({
+      start: Number(c.startTime),
+      title: String(c.title || '').trim(),
+      image: c.img ? String(c.img) : null,
+    }))
+    .sort((a, b) => a.start - b.start)
+}
+
 function itemImage(item) {
   const img = item['itunes:image']
   if (img && img['@_href']) return img['@_href']
@@ -129,6 +151,7 @@ function parseRssItems(channel, showId) {
       duration_seconds: parseDuration(textOf(item['itunes:duration'])),
       pub_date: parsePubDate(item.pubDate),
       image_url: itemImage(item),
+      chapters_url: itemChaptersUrl(item),
     })
   }
   return episodes
@@ -151,6 +174,7 @@ function parseAtomEntries(feed, showId) {
       duration_seconds: parseDuration(textOf(entry['itunes:duration'])),
       pub_date: parsePubDate(entry.published || entry.updated),
       image_url: itemImage(entry),
+      chapters_url: itemChaptersUrl(entry),
     })
   }
   return episodes

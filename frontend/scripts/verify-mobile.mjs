@@ -23,7 +23,8 @@
 import 'fake-indexeddb/auto'
 
 import { buildOpmlXml, parseOpmlFeedUrls } from '../src/mobile/opml.js'
-import { parseDuration, parseFeedXml, textOf } from '../src/mobile/rss.js'
+import { normalizeChapters, parseDuration, parseFeedXml, textOf } from '../src/mobile/rss.js'
+import { currentChapter, splitTimestamps } from '../src/lib/notes.js'
 import * as store from '../src/mobile/store.js'
 import { mobileApi } from '../src/mobile/api.js'
 
@@ -183,6 +184,41 @@ try {
   check('restore rejects a non-backup file', rejected)
   const usage = await mobileApi.storageUsage()
   check('storageUsage runs with no downloads', usage.total === 0 && usage.rows.length === 0)
+}
+
+// --- 9. Chapters, show notes, per-show speed ---
+{
+  const xml = `<?xml version="1.0"?><rss xmlns:podcast="https://podcastindex.org/namespace/1.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" version="2.0"><channel><title>T</title>
+    <item><title>With</title><guid>a</guid><enclosure url="https://x.test/a.mp3" type="audio/mpeg"/><podcast:chapters url="https://x.test/a.json" type="application/json+chapters"/></item>
+    <item><title>Without</title><guid>b</guid><enclosure url="https://x.test/b.mp3" type="audio/mpeg"/></item></channel></rss>`
+  const parsed = parseFeedXml(xml, 'https://x.test/feed')
+  const byTitle = Object.fromEntries(parsed.episodes.map((e) => [e.title, e]))
+  check('feed parse: chapters_url read from podcast:chapters', byTitle.With.chapters_url === 'https://x.test/a.json')
+  check('feed parse: episode without chapters has null', byTitle.Without.chapters_url === null)
+
+  const ch = normalizeChapters({ chapters: [
+    { startTime: 90, title: ' Second ' }, { startTime: 0, title: 'Intro', img: 'https://x.test/i.jpg' },
+    { startTime: 30, title: 'Hidden', toc: false }, { startTime: 'bad', title: 'Broken' } ] })
+  check('normalizeChapters sorts, trims, drops hidden/invalid', ch.length === 2 && ch[0].title === 'Intro' && ch[1].title === 'Second' && ch[0].image === 'https://x.test/i.jpg')
+  check('currentChapter picks the chapter at a time', currentChapter(ch, 45).title === 'Intro' && currentChapter(ch, 95).title === 'Second' && currentChapter([], 5) === null)
+
+  const parts = splitTimestamps('Intro 0:45 then 1:02:03 and 99:99 plus 12:34.')
+  const stamps = parts.filter((p) => p.seconds !== undefined)
+  check('timestamps: found and converted to seconds', stamps.length === 3 && stamps[0].seconds === 45 && stamps[1].seconds === 3723 && stamps[2].seconds === 754)
+  check('timestamps: invalid minutes/seconds ignored', !parts.some((p) => p.text === '99:99' && p.seconds !== undefined))
+
+  // cached chapters are returned without any network call
+  const eps = await store.listEpisodesForShow((await store.listShows())[0].id)
+  await store.putEpisodes([{ ...eps[0], chapters: [{ start: 0, title: 'Cached', image: null }] }])
+  check('getChapters returns cached chapters', (await mobileApi.getChapters(eps[0].id))[0].title === 'Cached')
+  check('getChapters: episode without a chapters URL gives []', (await mobileApi.getChapters(eps[1].id)).length === 0)
+
+  const sid = (await store.listShows())[0].id
+  check('playback speed defaults to 1', (await mobileApi.getPlaybackSpeed(sid)) === 1)
+  await mobileApi.setPlaybackSpeed(sid, 1.5)
+  check('per-show speed persists', (await mobileApi.getPlaybackSpeed(sid)) === 1.5)
+  await mobileApi.setAutoDownload(sid, true)
+  check('speed survives other show-setting changes', (await mobileApi.getPlaybackSpeed(sid)) === 1.5 && (await store.getShow(sid)).auto_download === true)
 }
 
 // --- cleanup: delete-show cascade ---

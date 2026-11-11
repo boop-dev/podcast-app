@@ -152,6 +152,19 @@ public class NativeAudioPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void getOptions(PluginCall call) {
+        onMain(call, () -> call.resolve(JSObject.fromJSONObject(controller.options())));
+    }
+
+    @PluginMethod
+    public void setOptions(PluginCall call) {
+        onMain(call, () -> {
+            controller.setOptions(call.getBoolean("skipSilence", false), call.getBoolean("boost", false));
+            call.resolve(JSObject.fromJSONObject(controller.options()));
+        });
+    }
+
+    @PluginMethod
     public void getState(PluginCall call) {
         onMain(call, () -> call.resolve(JSObject.fromJSONObject(controller.state())));
     }

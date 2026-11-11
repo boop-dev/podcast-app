@@ -33,6 +33,7 @@ export async function toItem(episode, fallbackShowTitle = '') {
     title: episode.title || '',
     artist: episode.show_title || fallbackShowTitle || '',
     artwork: episode.image_url || episode.show_image || '',
+    speed: (await store.getShow(episode.show_id).catch(() => null))?.playback_speed || 1,
   }
 }
 
