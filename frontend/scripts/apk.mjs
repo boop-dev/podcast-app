@@ -31,7 +31,7 @@ function run(cmd, args, opts = {}) {
   }
 }
 
-run('npx', ['vite', 'build', '--mode', 'mobile'])
+run('npx', ['vite', 'build'])
 run('npx', ['cap', 'sync', 'android'])
 run('"' + join(android, win ? 'gradlew.bat' : 'gradlew') + '"', ['assembleDebug'], { cwd: android })
 

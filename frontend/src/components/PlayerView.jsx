@@ -1,6 +1,6 @@
 /* Presentational player: a mini bar above the tab bar and the full-screen
- * sheet it expands into. It owns no audio: WebPlayer (browser <audio>) and
- * NativePlayer (Android ExoPlayer) feed it state and handle its callbacks. */
+ * sheet it expands into. It owns no audio: Player.jsx feeds it state from the
+ * native ExoPlayer service and handles its callbacks. */
 
 import { useState } from 'react'
 import { useBackHandler } from '../lib/back'

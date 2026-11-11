@@ -1,12 +1,6 @@
-# node / python artifacts
+# build output and dependencies
 node_modules/
-venv/
-__pycache__/
-*.pyc
 dist/
-*.db
-*.db-wal
-*.db-shm
 
 # OS / editor
 .DS_Store

@@ -1,7 +1,7 @@
 /* Subscriptions tab: the list of shows, and the episode list for one show. */
 
 import { useEffect, useState } from 'react'
-import { api, exportOpmlToFile, isNative } from '../api'
+import { api, exportOpmlToFile } from '../api'
 import EpisodeRow from './EpisodeRow'
 import Icon from './Icon'
 import { useBackHandler } from '../lib/back'
@@ -35,9 +35,7 @@ export default function Shows({ shows, onPlay, queueIds, onToggleQueue, download
     }
   }
 
-  async function exportOpml(e) {
-    if (!isNative()) return // web: let the plain /api/opml link work
-    e.preventDefault()
+  async function exportOpml() {
     setOpmlMsg('')
     try {
       const uri = await exportOpmlToFile()
@@ -170,15 +168,13 @@ export default function Shows({ shows, onPlay, queueIds, onToggleQueue, download
             {hidePlayed ? 'Showing unplayed' : 'Hide played'}
           </button>
         </div>
-        {isNative() && (
-          <label className="setting-row">
-            <span>
-              Auto-download new episodes
-              <small>On Wi-Fi only. Deleted after you finish them.</small>
-            </span>
-            <input type="checkbox" checked={Boolean(selected.auto_download)} onChange={toggleAutoDownload} />
-          </label>
-        )}
+                <label className="setting-row">
+          <span>
+            Auto-download new episodes
+            <small>On Wi-Fi only. Deleted after you finish them.</small>
+          </span>
+          <input type="checkbox" checked={Boolean(selected.auto_download)} onChange={toggleAutoDownload} />
+        </label>
         <div className="toolbar" style={{ marginTop: 8 }}>
           <button className="pill" onClick={markAllPlayed} disabled={loading}>
             Mark all played
@@ -212,11 +208,9 @@ export default function Shows({ shows, onPlay, queueIds, onToggleQueue, download
     return (
       <div className="empty">
         No subscriptions yet. Go to the Search tab and add your first show.
-        {isNative() && (
-          <p className="muted">
-            Or import an OPML file: <input type="file" accept=".opml,.xml,text/xml" onChange={importOpml} />
-          </p>
-        )}
+                <p className="muted">
+          Or import an OPML file: <input type="file" accept=".opml,.xml,text/xml" onChange={importOpml} />
+        </p>
         {opmlMsg && <p className="muted">{opmlMsg}</p>}
       </div>
     )
@@ -237,14 +231,12 @@ export default function Shows({ shows, onPlay, queueIds, onToggleQueue, download
       </div>
       <div className="card footnote">
         <p className="muted">
-          <a href="/api/opml" download onClick={exportOpml}>Export subscriptions (OPML)</a> to move them to
+          <button className="link" onClick={exportOpml}>Export subscriptions (OPML)</button> to move them to
           another app.
         </p>
-        {isNative() && (
-          <p className="muted">
-            Import OPML: <input type="file" accept=".opml,.xml,text/xml" onChange={importOpml} />
-          </p>
-        )}
+                <p className="muted">
+          Import OPML: <input type="file" accept=".opml,.xml,text/xml" onChange={importOpml} />
+        </p>
       </div>
       {opmlMsg && <p className="muted">{opmlMsg}</p>}
     </div>

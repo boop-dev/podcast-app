@@ -20,7 +20,7 @@
  *   exportOpml   -> OPML XML string for the stored shows
  */
 
-import { Capacitor, CapacitorHttp } from '@capacitor/core'
+import { CapacitorHttp } from '@capacitor/core'
 import { Directory, Filesystem } from '@capacitor/filesystem'
 import { buildOpmlXml, parseOpmlFeedUrls } from './opml.js'
 import { fetchFeed, httpGetJson, normalizeChapters } from './rss.js'
@@ -473,21 +473,6 @@ export const mobileApi = {
     })
     return result.uri
   },
-}
-
-/** Audio plays straight from the episode's enclosure URL with the
- *  existing HTML5 <audio> element — no proxy is needed for playback
- *  (the proxy only existed to dodge CORS, which does not apply to
- *  plain media playback). Downloaded episodes are resolved to their
- *  local file by resolveAudioSrc() in ./downloads.js. */
-export function mobileAudioUrl(episode) {
-  return episode.audio_url
-}
-
-/** True only inside the Capacitor native shell. Used by the api.js
- *  switch and the UI's OPML link. Re-exported here for convenience. */
-export function isNative() {
-  return Capacitor.isNativePlatform()
 }
 
 // Kept for the Node verify script: Apple Search over plain fetch is

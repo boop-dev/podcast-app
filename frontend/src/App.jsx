@@ -2,7 +2,7 @@
  * The player state lives here so any view can start playback. */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, isNative } from './api'
+import { api } from './api'
 import { App as CapApp } from '@capacitor/app'
 import { syncAll } from './mobile/sync'
 import { handleBack } from './lib/back'
@@ -25,7 +25,7 @@ const TITLES = {
 }
 
 export default function App() {
-  const [view, setView] = useState(isNative() ? 'home' : 'shows')
+  const [view, setView] = useState('home')
   const [playTick, setPlayTick] = useState(0)
   const [shows, setShows] = useState([])
   const [queue, setQueue] = useState([])
@@ -66,7 +66,6 @@ export default function App() {
   const viewRef = useRef(view)
   viewRef.current = view
   useEffect(() => {
-    if (!isNative()) return undefined
     const home = 'home'
     const sub = CapApp.addListener('backButton', () => {
       if (handleBack()) return
@@ -84,7 +83,6 @@ export default function App() {
 
   // Native only: refresh feeds (and auto-download) on start and on resume.
   useEffect(() => {
-    if (!isNative()) return
     let running = false
     async function sync() {
       if (running) return
@@ -111,7 +109,6 @@ export default function App() {
 
   // Keep the background checker's feed list current (new subscriptions, etc.).
   useEffect(() => {
-    if (!isNative()) return undefined
     const id = setTimeout(refreshFeedWatchList, 1500)
     return () => clearTimeout(id)
   }, [shows])
@@ -134,15 +131,6 @@ export default function App() {
     })
   }
 
-  // Web player only: when an episode ends, play the next queued episode, if any.
-  async function handleEnded() {
-    if (queue.length === 0) return
-    const next = queue[0]
-    await api.removeFromQueue(next.id)
-    await refreshQueue()
-    playEpisode(next)
-  }
-
   async function toggleQueue(episode) {
     if (queue.some((ep) => ep.id === episode.id)) {
       await api.removeFromQueue(episode.id)
@@ -153,11 +141,11 @@ export default function App() {
   }
 
   const tabs = [
-    ...(isNative() ? [{ id: 'home', label: 'Home', icon: 'home' }] : []),
+    { id: 'home', label: 'Home', icon: 'home' },
     { id: 'shows', label: 'Library', icon: 'library' },
     { id: 'search', label: 'Search', icon: 'search' },
     { id: 'queue', label: 'Up Next', icon: 'queue' },
-    ...(isNative() ? [{ id: 'settings', label: 'Settings', icon: 'settings' }] : []),
+    { id: 'settings', label: 'Settings', icon: 'settings' },
   ]
 
   return (
@@ -207,7 +195,6 @@ export default function App() {
       <Player
         nowPlaying={nowPlaying}
         queue={queue}
-        onEnded={handleEnded}
         onNativeChange={followNative}
         onQueueChanged={refreshQueue}
       />

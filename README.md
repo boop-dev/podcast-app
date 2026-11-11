@@ -1,171 +1,72 @@
 # Podcast App
 
-A personal, ad-free podcast player. No ads, no tracking, no accounts.
-Everything lives in a local SQLite database, and the app installs on
-Android as a PWA with offline listening.
+A personal, ad-free podcast player for Android. No ads, no tracking, no
+accounts, no server: everything lives on the phone.
 
-## What v1 does
+It is a React app wrapped in a Capacitor Android shell, with a native
+Media3 ExoPlayer service for playback.
 
-1. **Subscribe** by pasting an RSS feed URL, or by searching shows through
-   the Apple Podcasts Search API (free, no key).
-2. **Episode lists** per show: title, description, duration, publish date.
-3. **Player**: play/pause, seek, speed 0.75x–2x, and playback position is
-   remembered per episode, so it resumes where you left off.
-4. **Queue / Up Next**, with reorder.
-5. **Offline downloads**: episode audio is saved on the device and keeps
-   playing (and seeking) with no connection.
-6. **Sleep timer**: 5–60 minutes, or end of episode.
-7. **OPML export** of subscriptions, so the list can move to another app.
+## Features
 
-What v1 does **not** do: detect or skip sponsor/ad segments inside the
-audio. See "Possible later phases" below.
+- **Subscribe** by RSS URL or by searching the Apple Podcasts directory; OPML
+  import and export; full backup and restore (shows, positions, queue).
+- **Player**: lock-screen and notification controls, headset and Bluetooth
+  buttons, background playback that survives the WebView being frozen,
+  resume position, -15s / +30s, speed (remembered per show), sleep timer
+  (including end of episode), trim silence, voice boost.
+- **Chapters and show notes** (Podcasting 2.0 chapters; tappable timestamps).
+- **Queue** with reordering; the native service advances through it on its
+  own.
+- **Library**: new-episode badges, played / unplayed, search, sort, mark all
+  played, unsubscribe, a Home tab with "continue listening".
+- **Offline**: per-episode downloads and Wi-Fi-only auto-download for chosen
+  shows; a storage manager.
+- **New-episode alerts** in the background (off by default).
+- Light and dark themes that follow the system.
 
-## Architecture
+## Build and install
+
+You need Node, Android Studio (for the SDK and JDK 21) and a phone with USB or
+wireless debugging on. The full walkthrough is in
+[WINDOWS-BUILD.md](WINDOWS-BUILD.md). The short version:
 
 ```
-podcast-app/
-  backend/            Flask + SQLite
-    app.py            all API endpoints (see below)
-    db.py             schema + connection
-    requirements.txt
-  frontend/           React + Vite
-    src/
-      App.jsx         tabs (Shows / Search / Queue) + player state
-      api.js          backend client
-      sw.js           service worker (offline audio + app shell)
-      lib/downloads.js  Cache Storage helpers for offline episodes
-      components/     Player, Shows, SearchView, QueueView, EpisodeRow
-    public/icons/     PWA icons
-```
-
-**Backend** (`backend/app.py`): Flask, `libsql_client` (see `backend/db.py`),
-`feedparser` for RSS. Tables: `shows`, `episodes`, `positions`, `queue`,
-`downloads`. `db.py` talks to SQLite through the libSQL client, so the
-same SQL works against a local file (development) or a Turso database
-(deployed). Notable endpoints:
-
-- `GET /api/search?q=...` — proxies the Apple Search API, returns
-  `feedUrl` per show.
-- `POST /api/subscribe {feedUrl}` — fetches and parses the RSS feed.
-- `GET /api/audio?url=...` — range-aware audio proxy. Podcast hosts
-  often omit CORS headers and seeking needs HTTP Range, so the player
-  never talks to the host directly; it talks to this proxy.
-- `GET /api/opml` — OPML export.
-
-When the frontend has been built (`frontend/dist` exists), the Flask
-app serves it too, so one process runs the whole app.
-
-**Frontend**: React 18 + Vite 5. The PWA is built with
-`vite-plugin-pwa` in `injectManifest` mode, because the service
-worker (`src/sw.js`) is custom: it precaches the app shell with
-Workbox and handles `/api/audio` by hand. That hand-rolled part
-matters — the Cache API stores whole responses, and an `<audio>`
-element seeks with Range requests, so the worker slices cached bytes
-and answers `206 Partial Content` itself. Only episodes you
-explicitly download are put in the `podcast-episodes` cache.
-
-## Run it locally
-
-Requirements: Python 3.12+, Node 20+.
-
-```bash
-./run-dev.sh
-```
-
-That starts the backend on http://localhost:5001 and the frontend on
-http://localhost:5173 (which proxies `/api` to the backend). Or run
-each half by hand:
-
-```bash
-# backend
-python3 -m venv backend/venv
-backend/venv/bin/pip install -r backend/requirements.txt
-backend/venv/bin/python backend/app.py        # http://localhost:5001
-
-# frontend
 cd frontend
-npm install
-npm run dev                                   # http://localhost:5173
+npm install --legacy-peer-deps
+npm run install:phone     # builds the APK and installs it with adb
 ```
 
-To run the built app as one process (what the phone will use once
-deployed):
+`npm run apk` builds only. Builds are signed with a local keystore
+(`frontend/android/podcast-app.jks`, gitignored): keep it backed up, because
+an APK signed with a different key cannot be installed over this one.
 
-```bash
-cd frontend && npm run build
-backend/venv/bin/python backend/app.py        # serves API + app on :5001
+## Layout
+
+```
+frontend/
+  src/
+    App.jsx            tabs, Android back button, feed sync on open
+    components/        Player (native), PlayerView, Shows, Home, Queue, ...
+    mobile/            on-device data layer: IndexedDB store, RSS parsing,
+                       downloads, OPML, feed sync
+    lib/               native audio bridge, back handling, feed watch
+  android/             Capacitor project
+    app/src/main/java/dev/boop/podcastapp/
+      AudioController  the ExoPlayer, position persistence, sleep timer
+      PlaybackService  Media3 session: notification, lock screen, resumption
+      NativeAudioPlugin  JS bridge
+      FeedCheckWorker  background new-episode check
+  scripts/
+    apk.mjs            one-command build and install
+    verify-mobile.mjs  data-layer checks (run: npm run verify)
 ```
 
-### Install on Android
+## Tests
 
-Serve the built app over HTTPS (a PWA requirement for install +
-service worker), open it in Chrome, then "Add to Home screen" /
-"Install app". Episodes downloaded in the app are stored in Cache
-Storage on the phone and play offline.
+```
+cd frontend && npm run verify
+```
 
-The database file is `backend/podcasts.db` (created on first run).
-Override with the `PODCAST_DB` env var, e.g. for a scratch database
-while testing: `PODCAST_DB=/tmp/test.db backend/venv/bin/python backend/app.py`.
-Local development needs no other env vars: with no `TURSO_DATABASE_URL`
-set, the app uses the local SQLite file exactly as before.
-
-## Deploy (Render + Turso)
-
-Render's free tier hosts the app for $0 and needs no credit card, but
-its filesystem is ephemeral: a local SQLite file is wiped on every
-redeploy, restart, and spin-down (free services sleep after 15 idle
-minutes). Render's own free Postgres also expires 30 days after
-creation. So the compute lives on Render and the data lives in Turso.
-
-**Turso** is hosted libSQL, which speaks the SQLite dialect, so the
-app's SQL works unchanged. Its free tier is 5 GB, 100 databases, no
-credit card; sign up with GitHub at turso.tech. Create one database
-and note two values from its dashboard:
-
-- `TURSO_DATABASE_URL` — the database URL, starting `libsql://`
-- `TURSO_AUTH_TOKEN` — a token for that database
-
-**Render** uses the Blueprint in `render.yaml` (a free Python web
-service). Create the service from this repo in the Render dashboard,
-then set `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` there — they are
-declared with `sync: false` in the Blueprint, so their values are
-never stored in the repo. The build installs the backend requirements
-and builds the frontend; the start command runs `python backend/app.py`,
-which serves the API and the built app on Render's `$PORT`. The app
-creates the tables in Turso on first start, so there is no separate
-migration step.
-
-Two free-tier behaviours to expect: the service spins down after
-15 minutes idle, so the first request after a pause takes up to about
-a minute to wake it; and the PWA's offline downloads live in the
-phone's Cache Storage, not in Turso, so they are unaffected.
-
-The Fly.io files (`Dockerfile`, `fly.toml`) are a separate deploy
-path and are left in place; nothing about them changed.
-
-## Verified
-
-Built and checked 2026-11-08 against real feeds found through the
-Apple Search API (no feed URLs guessed):
-
-- **Stuff You Should Know** (`omnycontent.com` feed) subscribed:
-  2,922 episodes, newest first, with durations and playable audio
-  URLs. Audio proxy answered a `Range: bytes=0-1023` request with
-  `206` and exactly 1,024 bytes.
-- **Hidden Brain** (`feeds.simplecast.com/kwWc0lhf`) subscribed:
-  633 episodes.
-- Queue add, playback position save/get (123.5s round-tripped), and
-  OPML export (both shows, correct feed URLs) all verified by curl.
-- `npm run build` completes cleanly; the built app, manifest and
-  service worker are all served by Flask.
-
-## Possible later phases
-
-- **Sponsor/ad segment skipping**: transcribe episodes (e.g. Whisper)
-  and classify segments, then skip them at playback like STFUAI /
-  Castria do. Needs a transcription + detection pipeline; deliberately
-  out of v1.
-- **Sync**: positions/queue across devices (needs an account or a
-  sync service; out of scope for a local-first v1).
-- **Chapters and transcripts** in the player.
-- **Auto-download** of new episodes per show.
+This exercises the on-device data layer (storage, feed parsing, queue,
+chapters, backup and restore) in Node with a fake IndexedDB. The native
+player is tested on a device.

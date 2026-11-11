@@ -4,12 +4,10 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
     "build": "vite build",
-    "build:mobile": "vite build --mode mobile",
-    "preview": "vite preview",
     "apk": "node scripts/apk.mjs",
-    "install:phone": "node scripts/apk.mjs --install"
+    "install:phone": "node scripts/apk.mjs --install",
+    "verify": "node scripts/verify-mobile.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.6.0",
@@ -25,7 +23,6 @@
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
     "fake-indexeddb": "^6.2.8",
-    "vite": "^8.3.6",
-    "vite-plugin-pwa": "^1.1.0"
+    "vite": "^8.3.6"
   }
 }

@@ -1,18 +1,14 @@
-/* Offline downloads on native: real files, not Cache Storage.
+/* Offline downloads: real files, not a browser cache.
  *
- * The audio bytes are downloaded with the @capacitor/filesystem
- * plugin's downloadFile() (native HTTP, no CORS) into the app's
- * private Data directory, and the record (episode id -> file path)
- * lives in IndexedDB alongside everything else (see ./store.js).
- * Playback of a downloaded episode uses Capacitor.convertFileSrc()
- * so the <audio> element can load the local file; anything not
- * downloaded plays straight from its enclosure URL.
- *
- * The web path keeps using Cache Storage + the service worker —
- * see ../lib/downloads.js, which picks this backend only on native.
+ * The audio bytes are downloaded with the @capacitor/filesystem plugin's
+ * downloadFile() (native HTTP) into the app's private Data directory, and the
+ * record (episode id -> file path) lives in IndexedDB alongside everything
+ * else (see ./store.js). The native player opens the file by its file:// URI
+ * (see ../lib/nativeAudio.js); anything not downloaded streams from its
+ * enclosure URL.
  */
 
-import { Capacitor, CapacitorHttp } from '@capacitor/core'
+import { CapacitorHttp } from '@capacitor/core'
 import { Directory, Filesystem } from '@capacitor/filesystem'
 import * as store from './store.js'
 
@@ -68,14 +64,4 @@ export async function removeDownloadNative(episode) {
 export async function isDownloadedNative(episode) {
   const record = await store.getDownload(episode.id)
   return Boolean(record && record.path)
-}
-
-/** The src for the <audio> element: the local file when downloaded,
- *  otherwise the episode's enclosure URL (direct playback, no proxy). */
-export async function resolveAudioSrc(episode) {
-  const record = await store.getDownload(episode.id)
-  if (record && record.path) {
-    return Capacitor.convertFileSrc(record.path)
-  }
-  return episode.audio_url
 }

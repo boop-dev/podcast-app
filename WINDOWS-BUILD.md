@@ -40,12 +40,11 @@ the web app as an Android app). No other setup is needed.
 From inside `podcast-app\frontend`, run:
 
 ```powershell
-npm run build:mobile
+npm run build
 npx cap sync
 ```
 
-- `npm run build:mobile` builds the React frontend without the web
-  service worker (the native app does not use one).
+- `npm run build` compiles the React frontend into `dist\`.
 - `npx cap sync` copies that build into the `android\` folder.
 
 Whenever the app code changes later, repeat these two commands, then
@@ -116,7 +115,7 @@ keeps its data, with no unknown-source prompts.
   phone's Documents folder.
 - **Updating the app:** after pulling new code (`git pull`), run
   `npm install` (only if dependencies changed), then
-  `npm run build:mobile`, `npx cap sync`, and rebuild the APK in
+  `npm run build`, `npx cap sync`, and rebuild the APK in
   Android Studio. Install the new APK over the old one — your data
   stays.
 - **Troubleshooting:**
