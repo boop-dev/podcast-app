@@ -62,7 +62,7 @@ and decide on detection only after a feasibility spike.
 - [x] Long-skip in the notification or as a headset gesture — S
 - [x] Per-show skip intro / outro seconds — S
 - [x] Auto-skip chapters titled "Ad" / "Sponsor" when a feed marks them (opt-in) — S
-- [ ] Manual "mark ad" while listening: remember skip ranges per episode — M
+- [x] Manual "mark ad" while listening: remember skip ranges per episode — M
 - [ ] Feasibility spike: on-device detection (repeated-segment fingerprinting
       per show, transcript keywords, chapter hints). Written findings + decision — M
 - [ ] Implement the chosen detection, with an undo / "skipped an ad" indicator — L

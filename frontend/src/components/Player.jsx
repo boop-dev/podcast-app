@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import { NativeAudio, applyDrain, toItem } from '../lib/nativeAudio'
 import { adRanges } from '../lib/adChapters'
+import * as store from '../mobile/store'
 import { shareEpisode } from '../lib/share'
 import PlayerView from './PlayerView'
 
@@ -196,12 +197,51 @@ export default function Player({ nowPlaying, queue, onNativeChange, onQueueChang
     NativeAudio.setChapters({ id: episodeId, chapters: list }).catch(() => {})
   }, [episodeId, chapters])
 
+  // Ranges the listener marked as ads by hand: saved per episode, always skipped on later plays.
+  const [marked, setMarked] = useState([]) // [{startMs, endMs}]
+  const [markStart, setMarkStart] = useState(null) // ms where an ad was marked to begin, until it is ended
+  useEffect(() => {
+    setMarked([])
+    setMarkStart(null)
+    if (!episodeId) return undefined
+    let cancelled = false
+    store.getSetting(`ads:${episodeId}`, []).then((list) => !cancelled && setMarked(list)).catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [episodeId])
+  useEffect(() => {
+    if (!episodeId) return
+    NativeAudio.setMarkedRanges({ id: episodeId, ranges: marked }).catch(() => {})
+  }, [episodeId, marked])
+
+  function saveMarked(next) {
+    setMarked(next)
+    store.setSetting(`ads:${episodeId}`, next).catch(() => {})
+  }
+
+  function markAd() {
+    if (!snap) return
+    const now = Math.round(snap.positionMs)
+    if (markStart === null) {
+      setMarkStart(now)
+      return
+    }
+    const startMs = Math.min(markStart, now)
+    const endMs = Math.max(markStart, now)
+    setMarkStart(null)
+    if (endMs - startMs < 3000) return // a mis-tap, not an ad
+    saveMarked([...marked, { startMs, endMs }].sort((a, b) => a.startMs - b.startMs))
+  }
+
   function undoAdSkip() {
     if (!adToast) return
     undone.current.add(adToast.startMs)
     NativeAudio.seekTo({ positionMs: adToast.startMs })
     const ranges = adRanges(chapters, durationMs / 1000).filter((r) => !undone.current.has(r.startMs))
     NativeAudio.setSkipRanges({ id: adToast.id, ranges }).catch(() => {})
+    // A skipped marked ad: stop skipping it this session (it stays saved).
+    NativeAudio.setMarkedRanges({ id: adToast.id, ranges: marked.filter((r) => !undone.current.has(r.startMs)) }).catch(() => {})
     setAdToast(null)
   }
 
@@ -242,6 +282,11 @@ export default function Player({ nowPlaying, queue, onNativeChange, onQueueChang
       onRetry={() => NativeAudio.retry().catch(() => {})}
       adToast={adToast}
       onUndoAd={undoAdSkip}
+      markStart={markStart}
+      marked={marked}
+      onMarkAd={markAd}
+      onCancelMark={() => setMarkStart(null)}
+      onRemoveMark={(i) => saveMarked(marked.filter((_, j) => j !== i))}
       onShare={episode ? () => shareEpisode(episode, nowPlaying && nowPlaying.showTitle) : undefined}
       onToggle={() => {
         if (isPlaying) NativeAudio.pause()

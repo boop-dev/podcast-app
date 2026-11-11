@@ -177,6 +177,14 @@ public class NativeAudioPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void setMarkedRanges(PluginCall call) {
+        onMain(call, () -> {
+            controller.setMarkedRanges(call.getString("id"), call.getArray("ranges"));
+            call.resolve();
+        });
+    }
+
+    @PluginMethod
     public void setChapters(PluginCall call) {
         onMain(call, () -> {
             controller.setChapters(call.getString("id"), call.getArray("chapters"));

@@ -61,6 +61,8 @@ public final class AudioController {
     private static final String KEY_DIRTY = "dirty";
     private static final String KEY_CONSUMED = "consumed";
     private static final String KEY_LISTENED = "listened";
+    private static final String KEY_MARKED = "marked_ranges";
+    private static final int MAX_MARKED_EPISODES = 200;
     private static final long SAVE_INTERVAL_MS = 5000;
     private static final String KEY_SKIP_SILENCE = "opt_skip_silence";
     private static final String KEY_BOOST = "opt_boost";
@@ -111,6 +113,8 @@ public final class AudioController {
     @Nullable private String lastError = null;
     // episode id -> [startMs, endMs] ranges to skip (ad chapters), oldest first
     private final Map<String, List<long[]>> ranges = new LinkedHashMap<>();
+    // episode id -> [startMs, endMs] ranges the listener marked as ads by hand (always skipped)
+    private final Map<String, List<long[]>> marked = new LinkedHashMap<>();
     private boolean skipSilence = false;
     private boolean boost = false;
     @Nullable private LoudnessEnhancer enhancer;
@@ -223,6 +227,7 @@ public final class AudioController {
         skipAdChapters = prefs.getBoolean(KEY_SKIP_ADS, false);
         sleepShake = prefs.getBoolean(KEY_SLEEP_SHAKE, true);
         loadRanges();
+        loadMarked();
         skipSilence = prefs.getBoolean(KEY_SKIP_SILENCE, false);
         boost = prefs.getBoolean(KEY_BOOST, false);
         player.setSkipSilenceEnabled(skipSilence);
@@ -419,6 +424,64 @@ public final class AudioController {
         }
     }
 
+    /** If pos is inside one of the ranges, jump past it and tell JS (for the Undo notice). */
+    private boolean skipFrom(@Nullable List<long[]> list, long pos, long dur) {
+        if (list == null) return false;
+        for (long[] r : list) {
+            if (pos >= r[0] && pos < r[1] - 400) {
+                String id = lastId;
+                if (dur != C.TIME_UNSET && r[1] >= dur - 1500) skipToEnd();
+                else player.seekTo(r[1]);
+                if (listener != null) listener.onAdSkipped(id, r[0], r[1]);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Ranges the listener marked as ads in an episode: [{startMs,endMs}]. Replaces that episode's list. */
+    public void setMarkedRanges(String id, JSONArray arr) throws JSONException {
+        List<long[]> list = new ArrayList<>();
+        for (int i = 0; arr != null && i < arr.length(); i++) {
+            JSONObject o = arr.getJSONObject(i);
+            long s = o.getLong("startMs");
+            long e = o.getLong("endMs");
+            if (e > s) list.add(new long[]{s, e});
+        }
+        marked.remove(id);
+        if (!list.isEmpty()) marked.put(id, list);
+        while (marked.size() > MAX_MARKED_EPISODES) {
+            Iterator<String> it = marked.keySet().iterator();
+            it.next();
+            it.remove();
+        }
+        JSONObject out = new JSONObject();
+        for (Map.Entry<String, List<long[]>> en : marked.entrySet()) {
+            JSONArray rs = new JSONArray();
+            for (long[] r : en.getValue()) rs.put(new JSONArray().put(r[0]).put(r[1]));
+            out.put(en.getKey(), rs);
+        }
+        prefs.edit().putString(KEY_MARKED, out.toString()).apply();
+    }
+
+    private void loadMarked() {
+        try {
+            JSONObject o = new JSONObject(prefs.getString(KEY_MARKED, "{}"));
+            JSONArray names = o.names();
+            for (int i = 0; names != null && i < names.length(); i++) {
+                String id = names.getString(i);
+                JSONArray rs = o.getJSONArray(id);
+                List<long[]> list = new ArrayList<>();
+                for (int j = 0; j < rs.length(); j++) {
+                    JSONArray r = rs.getJSONArray(j);
+                    list.add(new long[]{r.getLong(0), r.getLong(1)});
+                }
+                marked.put(id, list);
+            }
+        } catch (JSONException ignored) {
+        }
+    }
+
     /** Chapter starts (ms) and titles for the episode that is loaded; set by JS once it has them. */
     public void setChapters(String id, JSONArray arr) throws JSONException {
         chaptersId = id;
@@ -463,20 +526,9 @@ public final class AudioController {
         showChapter(item, pos);
         item = player.getCurrentMediaItem(); // may have just been refreshed
         if (item == null) return;
-        if (skipAdChapters) {
-            List<long[]> list = ranges.get(lastId);
-            if (list != null) {
-                for (long[] r : list) {
-                    if (pos >= r[0] && pos < r[1] - 400) {
-                        String id = lastId;
-                        if (dur != C.TIME_UNSET && r[1] >= dur - 1500) skipToEnd();
-                        else player.seekTo(r[1]);
-                        if (listener != null) listener.onAdSkipped(id, r[0], r[1]);
-                        return;
-                    }
-                }
-            }
-        }
+        // Ranges the listener marked by hand always skip; ad chapters only when that option is on.
+        if (skipFrom(marked.get(lastId), pos, dur)) return;
+        if (skipAdChapters && skipFrom(ranges.get(lastId), pos, dur)) return;
         long outro = item.mediaMetadata.extras == null ? 0 : item.mediaMetadata.extras.getLong("outroMs", 0);
         if (outro > 0 && dur != C.TIME_UNSET && dur > outro && pos >= dur - outro) skipToEnd();
     }

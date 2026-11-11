@@ -87,6 +87,11 @@ export default function PlayerView({
   adToast = null, // {text} while a "skipped an ad" notice is showing
   onUndoAd,
   onShare,
+  markStart = null, // ms where a hand-marked ad began, while waiting for its end
+  marked = [],
+  onMarkAd,
+  onCancelMark,
+  onRemoveMark,
 }) {
   const [expanded, setExpanded] = useState(false)
   const [panel, setPanel] = useState(null) // null | 'chapters' | 'notes'
@@ -204,6 +209,18 @@ export default function PlayerView({
                 <Icon name="skipAhead" size={16} /> {formatDuration(skipAhead)}
               </button>
             )}
+            {onMarkAd && (
+              <>
+                <button className={`chip${markStart !== null ? ' on' : ''}`} onClick={onMarkAd}
+                  title="Mark an ad: tap at its start, tap again at its end. It is skipped next time.">
+                  <Icon name="skipAhead" size={16} />
+                  {markStart === null ? 'Mark ad' : `End ad (from ${formatDuration(markStart / 1000)})`}
+                </button>
+                {markStart !== null && (
+                  <button className="chip" onClick={onCancelMark} aria-label="Cancel ad mark">Cancel</button>
+                )}
+              </>
+            )}
             <button className={`chip${showSpeed ? ' on' : ''}`} onClick={() => setShowSpeed((v) => !v)} title="Playback speed">
               {speed}×
             </button>
@@ -223,6 +240,22 @@ export default function PlayerView({
           </div>
 
           {showSpeed && <SpeedPanel speed={speed} onChange={onSetSpeed} />}
+
+          {marked.length > 0 && (
+            <div className="marked-ads">
+              <span className="muted">Marked ads (skipped automatically)</span>
+              {marked.map((r, i) => (
+                <div key={r.startMs} className="marked-row">
+                  <button className="link" onClick={() => onSeek(Math.max(r.startMs / 1000 - 3, 0))}>
+                    {formatDuration(r.startMs / 1000)} – {formatDuration(r.endMs / 1000)}
+                  </button>
+                  <button className="icon-btn" onClick={() => onRemoveMark(i)} aria-label="Remove marked ad">
+                    <Icon name="trash" size={18} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="panel-tabs">
             {showChapters && (

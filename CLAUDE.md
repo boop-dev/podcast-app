@@ -1,0 +1,78 @@
+# Podcast app: notes for Claude
+
+A standalone Android podcast player. React (Vite) UI in a Capacitor WebView, with a native Java audio
+engine. There is no backend: everything is on the device. Package id `dev.boop.podcastapp`.
+The to-do list is `ROADMAP.md` (tick items as they ship). `README.md` and `WINDOWS-BUILD.md` cover setup.
+
+## Layout
+
+- `frontend/src/` React app. `components/` screens, `lib/` helpers, `mobile/` on-device data layer.
+- `frontend/src/mobile/store.js` IndexedDB via localforage (shows, episodes, positions, queue, downloads,
+  settings, listening). Ids are FNV hashes: `episodeIdFor(showId, guid)`. The Java side re-implements that
+  hash (`FeedCheckWorker.fnv`), so change both or neither.
+- `frontend/src/mobile/api.js` the app's API (subscribe, refresh, queue, positions). `src/api.js` re-exports it.
+- `frontend/android/app/src/main/java/dev/boop/podcastapp/` native code:
+  - `AudioController` owns the single ExoPlayer: position persistence, queue auto-advance, sleep timer,
+    ad-skip ranges, chapter titles in the notification, listening-time counting.
+  - `PlaybackService` media session (notification, lock screen, headset buttons).
+  - `NativeAudioPlugin` the Capacitor bridge. JS calls it as `NativeAudio.*` (`src/lib/nativeAudio.js`).
+  - `FeedCheckWorker` / `FeedWatch` WorkManager background check for new episodes. It also posts
+    notification buttons and downloads new episodes for auto-download shows.
+  - `NotificationActionReceiver`, `MainActivity` notification Play / Add to queue handling.
+
+## Key design rule
+
+Playback lives in the native service because Chromium freezes the WebView in the background. Anything that
+must keep working with the screen off (position saving, skipping, timers, counting) belongs in Java.
+Native records what happened in SharedPreferences, and JS collects it with `NativeAudio.drain()` (and the
+`consume*` plugin methods) when the page is awake. Follow that pattern for new background features.
+
+## Commands (run from `frontend/`)
+
+```
+npm run build            # vite build only (fast type/syntax check of the JS)
+npm run install:phone    # build debug APK and `adb install -r` it (keeps app data), then launches it
+npm run progress         # ROADMAP.md progress
+```
+
+Quick Java compile check without a full APK, from `frontend/android/`:
+`./gradlew --offline :app:compileDebugJavaWithJavac -q`
+
+There are no automated tests yet. Verification is a build plus testing on the phone.
+
+## Testing on the phone
+
+The owner uses wireless debugging, and the port changes every time it is toggled, so ask for the current
+`IP:port` and run `adb connect <ip:port>`. `adb devices` showing nothing means it dropped. Then:
+
+- Screenshot: `adb exec-out screencap -p > file.png` (save under the scratchpad), then read the image.
+  The screen is 1008x2244. Tab bar is at y~2090 (Home x~100, Library 302, Search 504, Up Next 705, Settings 907).
+- Tap/swipe/keys: `adb shell input tap x y`, `input swipe`, `input keyevent KEYCODE_MEDIA_PAUSE`.
+- Notification shade: `adb shell cmd statusbar expand-notifications`. Its layout shifts as notifications arrive,
+  so screenshot before every tap. `uiautomator dump` did not work here.
+- `adb shell "run-as dev.boop.podcastapp ..."` reads app files (debug build), e.g. `shared_prefs/feed_watch.xml`,
+  `files/`. A running app caches SharedPreferences, so force-stop it before editing a file from outside.
+- To test the new-episode flow without waiting for a real episode, add a TEMPORARY hook in `FeedCheckWorker.checkFeed`
+  that drops the newest known guid when a pref flag is set, install, set the flag, press Check now in Settings, then
+  remove the hook and reinstall. Never commit the hook. This found a real bug once, so it is worth doing.
+
+## How to work with this owner
+
+- Commit locally when a piece is done. Push only when asked, and only after testing on the phone: they were
+  unhappy when untested code was pushed. Say plainly what was and was not tested.
+- Tick finished items in `ROADMAP.md`. Pick the next items from it when told to keep going.
+- Prefer small, working slices over large unverified ones. Compile (`npm run build` + the Gradle command above)
+  before installing.
+- Leave the phone clean: remove any test hooks and test data you created, or tell them what is left behind.
+
+## Gotchas
+
+- Windows host. `.gitattributes` forces LF, so git warns about CRLF on edits. That is harmless.
+- `FeedCheckWorker` and the JS `buildFeedList` must agree on the feed config shape (`autoDownload`, `known`).
+- Background-downloaded files are recorded by the app on next open (`recordBackgroundDownloads` in `App.jsx`),
+  and that must run before `cleanupOrphans`, or the files are deleted as orphans.
+- Notification button presses made while the app is open reach JS through the `notificationaction` window event
+  (`MainActivity.pokeJs`). Without it they wait until the next resume.
+- ExoPlayer applies a metadata-only `replaceMediaItem` in place (used for the chapter title). The item carries a
+  `refresh` extra so `onMediaItemTransition` ignores it.
+- `install:phone` kills the running app, so playback stops after each install.
