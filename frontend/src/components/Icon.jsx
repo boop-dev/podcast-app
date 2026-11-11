@@ -57,6 +57,21 @@ const PATHS = {
   moon: <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" />,
   up: <path d="M12 19V6M6 11l6-6 6 6" />,
   down: <path d="M12 5v13M6 13l6 6 6-6" />,
+  top: <path d="M5 4h14M12 20V8M6 13l6-6 6 6" />,
+  bottom: <path d="M5 20h14M12 4v12M6 11l6 6 6-6" />,
+  more: (
+    <>
+      <circle cx="12" cy="5" r="1.4" fill="currentColor" />
+      <circle cx="12" cy="12" r="1.4" fill="currentColor" />
+      <circle cx="12" cy="19" r="1.4" fill="currentColor" />
+    </>
+  ),
+  playNext: (
+    <>
+      <path d="M4 6h10M4 12h6M4 18h6" />
+      <path d="M15 11v8l6-4z" fill="currentColor" stroke="none" />
+    </>
+  ),
   trash: <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" />,
 }
 

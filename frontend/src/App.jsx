@@ -131,6 +131,11 @@ export default function App() {
     })
   }
 
+  async function playNext(episode) {
+    await api.playNext(episode.id)
+    refreshQueue()
+  }
+
   async function toggleQueue(episode) {
     if (queue.some((ep) => ep.id === episode.id)) {
       await api.removeFromQueue(episode.id)
@@ -172,6 +177,7 @@ export default function App() {
           onPlay={playEpisode}
           queueIds={new Set(queue.map((ep) => ep.id))}
           onToggleQueue={toggleQueue}
+          onPlayNext={playNext}
           downloadedIds={downloadedIds}
           onDownloadChanged={refreshDownloads}
           onRefresh={() => {

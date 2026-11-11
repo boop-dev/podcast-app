@@ -7,7 +7,8 @@
     "build": "vite build",
     "apk": "node scripts/apk.mjs",
     "install:phone": "node scripts/apk.mjs --install",
-    "verify": "node scripts/verify-mobile.mjs"
+    "verify": "node scripts/verify-mobile.mjs",
+    "progress": "node scripts/progress.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.6.0",

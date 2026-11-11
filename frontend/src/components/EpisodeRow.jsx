@@ -25,7 +25,7 @@ export function formatDate(iso) {
   })
 }
 
-export default function EpisodeRow({ episode, onPlay, inQueue, onToggleQueue, downloaded, onDownloadChanged, onPlayedChanged }) {
+export default function EpisodeRow({ episode, onPlay, inQueue, onToggleQueue, onPlayNext, downloaded, onDownloadChanged, onPlayedChanged }) {
   const [busy, setBusy] = useState(false)
   const progress =
     episode.duration_seconds && episode.position_seconds
@@ -81,6 +81,16 @@ export default function EpisodeRow({ episode, onPlay, inQueue, onToggleQueue, do
         >
           <Icon name={inQueue ? 'minus' : 'plus'} />
         </button>
+        {onPlayNext && (
+          <button
+            className="icon-btn"
+            onClick={() => onPlayNext(episode)}
+            title="Play next"
+            aria-label="Play next"
+          >
+            <Icon name="playNext" />
+          </button>
+        )}
         <button
           className={`icon-btn${downloaded ? ' on' : ''}`}
           onClick={toggleDownload}

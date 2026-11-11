@@ -236,6 +236,34 @@ try {
   check('episodes can be un-played after mark all', (await mobileApi.getPosition(eps[1].id)).completed === false)
 }
 
+// --- 11. Queue controls ---
+{
+  const sid = (await store.listShows())[0].id
+  const [a, b, c, d] = (await store.listEpisodesForShow(sid)).slice(0, 4)
+  await mobileApi.clearQueue()
+  await mobileApi.addToQueue(a.id)
+  await mobileApi.addToQueue(b.id)
+  await mobileApi.addToQueue(c.id)
+  const order = async () => (await store.getQueueOrder())
+  await mobileApi.playNext(d.id)
+  check('playNext puts the episode first', (await order())[0] === d.id && (await order()).length === 4)
+  await mobileApi.playNext(c.id)
+  const o2 = await order()
+  check('playNext on a queued episode moves it (no duplicate)', o2[0] === c.id && o2.length === 4 && new Set(o2).size === 4)
+  await mobileApi.moveInQueue(b.id, 'top')
+  check('moveInQueue top', (await order())[0] === b.id)
+  await mobileApi.moveInQueue(b.id, 'bottom')
+  const o3 = await order()
+  check('moveInQueue bottom', o3[o3.length - 1] === b.id && o3.length === 4)
+  let rejected = false
+  try { await mobileApi.moveInQueue('ep_not_there', 'top') } catch { rejected = true }
+  check('moveInQueue rejects an episode that is not queued', rejected)
+  await mobileApi.removeFromQueue(c.id)
+  check('removeFromQueue leaves the rest in order', (await order()).length === 3 && !(await order()).includes(c.id))
+  const cleared = await mobileApi.clearQueue()
+  check('clearQueue empties the queue', cleared.cleared === 3 && (await order()).length === 0)
+}
+
 // --- cleanup: delete-show cascade ---
 await mobileApi.deleteShow(show.id)
 check('deleteShow removes show + episodes', (await store.listShows()).length === 0 && (await store.listEpisodesForShow(show.id)).length === 0)

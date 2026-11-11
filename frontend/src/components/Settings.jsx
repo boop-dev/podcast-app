@@ -27,7 +27,7 @@ export default function Settings({ onChanged }) {
     if (!watch.enabled) {
       const { granted } = await NativeAudio.requestNotificationPermission()
       if (!granted) {
-        setMsg('Allow notifications for Podcast App in Android settings to get new-episode alerts.')
+        setMsg('Allow notifications for Podcasts in Android settings to get new-episode alerts.')
         return
       }
     }

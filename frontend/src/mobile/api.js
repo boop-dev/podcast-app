@@ -273,6 +273,30 @@ export const mobileApi = {
     return { queued: episodeId }
   },
 
+  /** Put an episode at the front of the queue (it plays next). */
+  async playNext(episodeId) {
+    const ep = await store.getEpisode(episodeId)
+    if (!ep) throw new Error('episode not found')
+    const order = (await store.getQueueOrder()).filter((id) => id !== episodeId)
+    await store.setQueueOrder([episodeId, ...order])
+    return { queued: episodeId, position: 0 }
+  },
+
+  /** Move a queued episode to the 'top' or 'bottom' of the queue. */
+  async moveInQueue(episodeId, where) {
+    const order = await store.getQueueOrder()
+    if (!order.includes(episodeId)) throw new Error('episode is not in the queue')
+    const rest = order.filter((id) => id !== episodeId)
+    await store.setQueueOrder(where === 'top' ? [episodeId, ...rest] : [...rest, episodeId])
+    return { moved: episodeId, where }
+  },
+
+  async clearQueue() {
+    const count = (await store.getQueueOrder()).length
+    await store.setQueueOrder([])
+    return { cleared: count }
+  },
+
   async removeFromQueue(episodeId) {
     await store.removeFromQueueOrder(episodeId)
     return { removed: episodeId }

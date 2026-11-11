@@ -6,7 +6,7 @@ import EpisodeRow from './EpisodeRow'
 import Icon from './Icon'
 import { useBackHandler } from '../lib/back'
 
-export default function Shows({ shows, onPlay, queueIds, onToggleQueue, downloadedIds, onDownloadChanged, onRefresh }) {
+export default function Shows({ shows, onPlay, queueIds, onToggleQueue, onPlayNext, downloadedIds, onDownloadChanged, onRefresh }) {
   const [selected, setSelected] = useState(null) // a show row
   const [episodes, setEpisodes] = useState([])
   const [loading, setLoading] = useState(false)
@@ -195,6 +195,7 @@ export default function Shows({ shows, onPlay, queueIds, onToggleQueue, download
             onPlay={onPlay}
             inQueue={queueIds.has(ep.id)}
             onToggleQueue={onToggleQueue}
+            onPlayNext={onPlayNext}
             downloaded={downloadedIds.has(ep.id)}
             onDownloadChanged={onDownloadChanged}
             onPlayedChanged={reloadEpisodes}

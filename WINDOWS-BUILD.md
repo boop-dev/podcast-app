@@ -80,7 +80,7 @@ podcast-app\frontend\android\app\build\outputs\apk\debug\app-debug.apk
    prompt and turn on **"Allow from this source"** (install from
    unknown apps) for the app you opened it with (Files, Chrome, or
    Drive). Then go back and tap **Install**.
-4. Open **Podcast App**. The first launch needs internet to search
+4. Open **Podcasts**. The first launch needs internet to search
    and fetch feeds.
 
 ## Fast path: one command, USB install
