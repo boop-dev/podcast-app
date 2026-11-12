@@ -96,7 +96,7 @@ and decide on detection only after a feasibility spike.
 
 - [x] Notification actions: Play / Add to queue — M
 - [x] Alert check covers more than the newest 12 items — S
-- [ ] Scheduled automatic backups to a cloud folder — M
+- [x] Scheduled automatic backups to a cloud folder — M
 
 ## Platform
 

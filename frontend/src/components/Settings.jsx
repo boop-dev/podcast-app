@@ -12,6 +12,7 @@ import { CAP_OPTIONS_GB } from '../lib/storageCap'
 import { getTheme, setTheme } from '../lib/theme'
 import Picker from './Picker'
 import ListeningStats from './ListeningStats'
+import AutoBackup from './AutoBackup'
 
 function formatBytes(n) {
   if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`
@@ -294,6 +295,8 @@ export default function Settings({ onChanged }) {
           <button className="pill" onClick={deletePlayed}>Delete played downloads</button>
         </>
       )}
+
+      <AutoBackup />
 
       <h2 className="section">Backup</h2>
       <p className="muted">

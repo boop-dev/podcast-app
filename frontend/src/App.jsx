@@ -8,6 +8,7 @@ import { syncAll } from './mobile/sync'
 import * as store from './mobile/store'
 import { episodeIdFor } from './mobile/store'
 import { parseSharedLink } from './lib/shareTarget'
+import { stageBackupSoon } from './lib/autoBackup'
 import { handleBack } from './lib/back'
 import { NativeAudio } from './lib/nativeAudio'
 import { refreshFeedWatchList } from './lib/feedWatch'
@@ -126,8 +127,11 @@ export default function App() {
         running = false
       }
     }
-    sync()
-    const onVisible = () => document.visibilityState === 'visible' && sync()
+    sync().then(() => stageBackupSoon(8000))
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') sync()
+      else stageBackupSoon(0) // leaving the app: the page may be frozen soon, so stage the latest data now
+    }
     document.addEventListener('visibilitychange', onVisible)
     // A notification button was pressed while the app was already open.
     const onAction = () => applyNotificationActions()

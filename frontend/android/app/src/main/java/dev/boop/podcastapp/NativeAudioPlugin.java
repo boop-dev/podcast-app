@@ -305,6 +305,110 @@ public class NativeAudioPlugin extends Plugin {
         call.resolve(o);
     }
 
+    // --- scheduled backup -----------------------------------------------------
+
+    private JSObject backupSettings() {
+        android.content.SharedPreferences p = BackupWorker.prefs(getContext());
+        JSObject o = new JSObject();
+        o.put("folderName", p.getString(BackupWorker.KEY_FOLDER_NAME, null));
+        o.put("hasFolder", p.getString(BackupWorker.KEY_FOLDER_URI, null) != null);
+        o.put("enabled", p.getBoolean(BackupWorker.KEY_ENABLED, false));
+        o.put("intervalDays", p.getInt(BackupWorker.KEY_INTERVAL_DAYS, 1));
+        o.put("lastOkAt", p.getLong(BackupWorker.KEY_LAST_OK, 0));
+        o.put("lastError", p.getString(BackupWorker.KEY_LAST_ERROR, null));
+        o.put("stagedAt", p.getLong(BackupWorker.KEY_STAGED_AT, 0));
+        return o;
+    }
+
+    @PluginMethod
+    public void getBackupSettings(PluginCall call) {
+        call.resolve(backupSettings());
+    }
+
+    /** Let the user pick any folder (including a cloud drive's) with the system folder picker. */
+    @PluginMethod
+    public void pickBackupFolder(PluginCall call) {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                        | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION | Intent.FLAG_GRANT_PREFIX_URI_PERMISSION);
+        startActivityForResult(call, intent, "folderPicked");
+    }
+
+    @com.getcapacitor.annotation.ActivityCallback
+    private void folderPicked(PluginCall call, androidx.activity.result.ActivityResult result) {
+        if (call == null) return;
+        if (result.getResultCode() != android.app.Activity.RESULT_OK || result.getData() == null
+                || result.getData().getData() == null) {
+            call.reject("cancelled");
+            return;
+        }
+        android.net.Uri uri = result.getData().getData();
+        getContext().getContentResolver().takePersistableUriPermission(uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+        androidx.documentfile.provider.DocumentFile dir =
+                androidx.documentfile.provider.DocumentFile.fromTreeUri(getContext(), uri);
+        BackupWorker.prefs(getContext()).edit()
+                .putString(BackupWorker.KEY_FOLDER_URI, uri.toString())
+                .putString(BackupWorker.KEY_FOLDER_NAME, dir != null && dir.getName() != null ? dir.getName() : uri.getLastPathSegment())
+                .putBoolean(BackupWorker.KEY_ENABLED, true)
+                .remove(BackupWorker.KEY_LAST_ERROR).apply();
+        BackupWorker.reschedule(getContext());
+        call.resolve(backupSettings());
+    }
+
+    @PluginMethod
+    public void setBackupSettings(PluginCall call) {
+        BackupWorker.prefs(getContext()).edit()
+                .putBoolean(BackupWorker.KEY_ENABLED, call.getBoolean("enabled", false))
+                .putInt(BackupWorker.KEY_INTERVAL_DAYS, Math.max(1, call.getInt("intervalDays", 1))).apply();
+        BackupWorker.reschedule(getContext());
+        call.resolve(backupSettings());
+    }
+
+    @PluginMethod
+    public void clearBackupFolder(PluginCall call) {
+        android.content.SharedPreferences p = BackupWorker.prefs(getContext());
+        String uri = p.getString(BackupWorker.KEY_FOLDER_URI, null);
+        if (uri != null) {
+            try {
+                getContext().getContentResolver().releasePersistableUriPermission(android.net.Uri.parse(uri),
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            } catch (Exception ignored) {
+            }
+        }
+        p.edit().clear().apply();
+        BackupWorker.reschedule(getContext());
+        call.resolve(backupSettings());
+    }
+
+    /** The app hands over its latest backup JSON; the worker copies it to the folder on schedule. */
+    @PluginMethod
+    public void stageBackup(PluginCall call) {
+        String json = call.getString("json");
+        if (json == null || json.isEmpty()) {
+            call.reject("json is required");
+            return;
+        }
+        try {
+            java.io.File dir = getContext().getFilesDir();
+            java.io.File tmp = new java.io.File(dir, BackupWorker.STAGED_FILE + ".tmp");
+            try (java.io.FileOutputStream out = new java.io.FileOutputStream(tmp)) {
+                out.write(json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+            if (!tmp.renameTo(new java.io.File(dir, BackupWorker.STAGED_FILE))) throw new java.io.IOException("rename failed");
+            BackupWorker.prefs(getContext()).edit().putLong(BackupWorker.KEY_STAGED_AT, System.currentTimeMillis()).apply();
+            call.resolve();
+        } catch (java.io.IOException e) {
+            call.reject(e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void runBackupNow(PluginCall call) {
+        BackupWorker.runNow(getContext());
+        call.resolve();
+    }
+
     @PluginMethod
     public void getState(PluginCall call) {
         onMain(call, () -> call.resolve(JSObject.fromJSONObject(controller.state())));
