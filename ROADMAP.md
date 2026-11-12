@@ -112,7 +112,7 @@ and decide on detection only after a feasibility spike.
 
 - [x] Signed release build (not a debug APK) — M
 - [x] Human-readable versionName — S
-- [ ] GitHub Actions release builds + Obtainium updates — M (workflow written in .github/workflows/release.yml; needs the four secrets from the README and a first tag to prove it)
+- [ ] GitHub Actions release builds + Obtainium updates — M (build, tests and signing verified by a manual run on 2026-11-12; still to prove: the tagged-release upload and an Obtainium update)
 - [x] `.gitattributes` to stop line-ending noise — S
 - [x] Offline unit tests for the pure logic (`npm test`, run in the release workflow) — S
 - [ ] Automated UI / native (Java) tests — L
