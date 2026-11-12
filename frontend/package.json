@@ -9,7 +9,7 @@
     "install:phone": "node scripts/apk.mjs --install",
     "release": "node scripts/apk.mjs --release",
     "verify": "node scripts/verify-mobile.mjs",
-    "test": "node --test \"test/*.test.mjs\"",
+    "test": "node --test",
     "progress": "node scripts/progress.mjs"
   },
   "dependencies": {
