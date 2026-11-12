@@ -52,6 +52,11 @@ The owner uses wireless debugging, and the port changes every time it is toggled
   so screenshot before every tap. `uiautomator dump` did not work here.
 - `adb shell "run-as dev.boop.podcastapp ..."` reads app files (debug build), e.g. `shared_prefs/feed_watch.xml`,
   `files/`. A running app caches SharedPreferences, so force-stop it before editing a file from outside.
+- To test tablet / wide layouts, make the phone pretend to be bigger: `adb shell wm size 1800x2400` and
+  `adb shell wm density 280` (about 900dp wide), launch the app with `monkey` (do not tap blind: the Settings app
+  may be in front, and Wireless debugging lives there). ALWAYS restore afterwards with `adb shell wm size reset`
+  and `adb shell wm density 456` (the owner's own density override; `wm density` reports it). Screenshots at a
+  fake size are bigger than 1008x2244, so check the "multiply by" note on the image before computing taps.
 - To test the new-episode flow without waiting for a real episode, add a TEMPORARY hook in `FeedCheckWorker.checkFeed`
   that drops the newest known guid when a pref flag is set, install, set the flag, press Check now in Settings, then
   remove the hook and reinstall. Never commit the hook. This found a real bug once, so it is worth doing.

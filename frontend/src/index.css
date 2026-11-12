@@ -409,6 +409,43 @@ h2.section { font-size: 0.95rem; font-weight: 700; margin: 22px 0 10px; }
 .tabbar button.active { color: var(--accent); }
 .tabbar .badge { position: absolute; top: 7px; left: calc(50% + 6px); font-size: 10px; padding: 0 5px; }
 
+/* ---------- tablets and wide windows ---------- */
+/* From 840px up (tablets, unfolded foldables) the tab bar becomes a left navigation rail, the
+   content column widens and the library grid gets bigger tiles. */
+
+@media (min-width: 840px) {
+  :root { --nav-h: 0px; --rail-w: 92px; }
+
+  .tabbar {
+    top: 0; right: auto; bottom: 0; left: 0;
+    width: calc(var(--rail-w) + env(safe-area-inset-left));
+    height: auto;
+    padding: calc(20px + env(safe-area-inset-top)) 0 20px env(safe-area-inset-left);
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 6px;
+    border-top: 0;
+    border-right: 1px solid var(--border);
+  }
+  .tabbar button { flex: none; height: 74px; }
+  .tabbar .badge { top: 8px; left: calc(50% + 8px); }
+
+  .app {
+    max-width: calc(900px + var(--rail-w));
+    padding: 0 32px calc(var(--mini-h) + 28px + env(safe-area-inset-bottom))
+      calc(var(--rail-w) + 32px + env(safe-area-inset-left));
+  }
+  header.app-header h1 { font-size: 2.1rem; }
+
+  .mini-player {
+    left: calc(var(--rail-w) + 16px + env(safe-area-inset-left));
+    right: 16px;
+    max-width: 760px;
+  }
+  .ad-toast { left: calc(var(--rail-w) + 16px); right: 16px; }
+  .show-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 22px 16px; }
+}
+
 /* ---------- misc ---------- */
 
 .setting-row {
