@@ -32,6 +32,7 @@ Native records what happened in SharedPreferences, and JS collects it with `Nati
 ```
 npm run build            # vite build only (fast type/syntax check of the JS)
 npm run install:phone    # build debug APK and `adb install -r` it (keeps app data), then launches it
+npm test                 # offline unit tests (frontend/test/*.test.mjs)
 npm run progress         # ROADMAP.md progress
 ```
 
@@ -40,7 +41,10 @@ Quick Java compile check without a full APK, from `frontend/android/`:
 file major version", set `JAVA_HOME` to the JDK 21 under `~/.jdks/jbr-21.0.11` first (`npm run install:phone` finds
 it itself). A new dependency is not in the offline cache, so build once without `--offline`.
 
-There are no automated tests yet. Verification is a build plus testing on the phone.
+Tests: `npm test` runs the offline unit tests in `frontend/test/` (Node's built-in runner, `fake-indexeddb` for the
+store; the release workflow runs it too). `node scripts/verify-mobile.mjs` is a larger data-layer check that needs the
+network (Apple search, a real feed). There are no UI or native (Java) tests yet, so anything in Java or the player is
+verified by a compile plus testing on the phone. Put new pure logic in `src/lib/` so it can be tested without a device.
 
 ## Testing on the phone
 

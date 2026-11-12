@@ -84,6 +84,23 @@ Risks and limits
 - Ads that change every episode will not be caught. That needs the listener to keep marking, or a transcript signal.
 - A re-encoded or re-stitched copy of the same ad can lower match strength: keep the vote threshold conservative.
 
+## Direction update (2026-11-12): on hold, and the goal is automatic
+
+After the spike the owner said the real goal is **automatic, near-instant ad removal**, not manual marking, and plans to
+run a home server for it: a refurbished Lenovo ThinkCentre M80q Tiny (i5-10500T, 32 GB RAM, 512 GB SSD, no usable GPU;
+it has no PCIe slot, so a GPU would need an OCuLink hack, which is not planned). Work on this is **on the back burner**.
+The design discussed, for when it resumes:
+
+- A server process watches the subscribed feeds, downloads new episodes, transcribes them, finds the ads and stores the
+  skip ranges (plus clip fingerprints, so the phone can re-align if its copy of the episode differs).
+- The phone fetches ranges and skips them natively, with the existing Undo notice. Skipping ranges, not cutting audio.
+- Signals to combine: repeated audio across the show's episodes, a transcript text classifier, silence/music/loudness for
+  the edges, and per-show habits. Auto-skip only above a confidence threshold; lower confidence becomes a suggestion.
+- Reaching it from outside the house needs a VPN (Tailscale or WireGuard) and an auth token, never an open port.
+- First step when resumed: build a labelled test set from the owner's shows and measure precision and recall of each
+  method and of the combination, then benchmark on the M80q. The laptop used for this spike is an i7-12700H, faster
+  than the M80q's CPU, so expect lower speeds there than the numbers above.
+
 ## Not done / open questions
 
 - Only 2 shows and ~27 minutes per episode. Mid-rolls deeper in long episodes (ShxtsNGigs runs 70 to 95 min) were not examined.

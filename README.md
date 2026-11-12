@@ -95,7 +95,9 @@ frontend/
 ## Tests
 
 ```
-cd frontend && npm run verify
+cd frontend
+npm test            # offline unit tests (share links, listening stats, stats storage)
+npm run verify      # larger data-layer check; needs the network
 ```
 
 This exercises the on-device data layer (storage, feed parsing, queue,
