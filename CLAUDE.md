@@ -36,7 +36,9 @@ npm run progress         # ROADMAP.md progress
 ```
 
 Quick Java compile check without a full APK, from `frontend/android/`:
-`./gradlew --offline :app:compileDebugJavaWithJavac -q`
+`./gradlew --offline :app:compileDebugJavaWithJavac -q`. Gradle needs JDK 21: if it fails with "Unsupported class
+file major version", set `JAVA_HOME` to the JDK 21 under `~/.jdks/jbr-21.0.11` first (`npm run install:phone` finds
+it itself). A new dependency is not in the offline cache, so build once without `--offline`.
 
 There are no automated tests yet. Verification is a build plus testing on the phone.
 
@@ -80,6 +82,10 @@ The owner uses wireless debugging, and the port changes every time it is toggled
   (`MainActivity.pokeJs`). Without it they wait until the next resume.
 - ExoPlayer applies a metadata-only `replaceMediaItem` in place (used for the chapter title). The item carries a
   `refresh` extra so `onMediaItemTransition` ignores it.
+- Automatic backup: JS stages a backup JSON into app storage (`NativeAudio.stageBackup`) whenever the app is used,
+  and `BackupWorker` copies it to the folder the user picked (Storage Access Framework, so cloud drives work).
+  Backups therefore reflect the last time the app was open. In git-bash, adb paths like `/sdcard/...` get mangled:
+  prefix the command with `MSYS_NO_PATHCONV=1`.
 - `install:phone` kills the running app, so playback stops after each install.
 - `versionCode` is the git commit count. After committing, an older debug APK on disk is a "downgrade" and
   `adb install -r` refuses it (`INSTALL_FAILED_VERSION_DOWNGRADE`): rebuild with `npm run install:phone`.
