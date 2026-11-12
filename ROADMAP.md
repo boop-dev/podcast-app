@@ -63,9 +63,12 @@ and decide on detection only after a feasibility spike.
 - [x] Per-show skip intro / outro seconds — S
 - [x] Auto-skip chapters titled "Ad" / "Sponsor" when a feed marks them (opt-in) — S
 - [x] Manual "mark ad" while listening: remember skip ranges per episode — M
-- [ ] Feasibility spike: on-device detection (repeated-segment fingerprinting
-      per show, transcript keywords, chapter hints). Written findings + decision — M
-- [ ] Implement the chosen detection, with an undo / "skipped an ad" indicator — L
+- [x] Feasibility spike: on-device detection (repeated-segment fingerprinting
+      per show, transcript keywords, chapter hints). Findings and decision in
+      docs/ad-detection-spike.md — M
+- [ ] Implement "mark once, skip everywhere": fingerprint marked ads, skip the same audio in
+      other episodes (downloaded first, then pre-roll on streams), suggest repeated clips,
+      keep the Undo notice — L
 
 ## Listening
 
