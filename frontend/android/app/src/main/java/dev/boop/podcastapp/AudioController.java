@@ -371,6 +371,7 @@ public final class AudioController {
 
     private void notifyChange() {
         if (listener != null) listener.onChange();
+        refreshWidget(); // the home-screen widget follows every player change
     }
 
     // --- persistence ------------------------------------------------------
@@ -633,6 +634,36 @@ public final class AudioController {
                     .put("positionMs", player.getCurrentPosition()).toString()).apply();
         } catch (JSONException ignored) {
         }
+    }
+
+    /** The running controller, or null if none was created in this process (does not create one). */
+    @Nullable
+    public static synchronized AudioController peek() {
+        return instance;
+    }
+
+    /** What play would resume, read straight from storage (used by the widget before the player exists). */
+    @Nullable
+    public static JSONObject readResume(Context context) {
+        String s = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_RESUME, null);
+        try {
+            return s == null ? null : new JSONObject(s);
+        } catch (JSONException e) {
+            return null;
+        }
+    }
+
+    private final Runnable widgetRunnable = new Runnable() {
+        @Override
+        public void run() {
+            PodcastWidget.refresh(appContext);
+        }
+    };
+
+    /** Redraw the home-screen widget soon; several changes in a row collapse into one redraw. */
+    private void refreshWidget() {
+        main.removeCallbacks(widgetRunnable);
+        main.postDelayed(widgetRunnable, 150);
     }
 
     /** The playlist to restore, or null if there is nothing to resume. */

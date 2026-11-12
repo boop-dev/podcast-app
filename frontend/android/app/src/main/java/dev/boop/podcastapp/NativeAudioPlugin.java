@@ -305,6 +305,18 @@ public class NativeAudioPlugin extends Plugin {
         call.resolve(o);
     }
 
+    /** Ask the launcher to pin the widget (the user confirms in a system dialog). Resolves {supported, requested}. */
+    @PluginMethod
+    public void requestPinWidget(PluginCall call) {
+        android.appwidget.AppWidgetManager m = android.appwidget.AppWidgetManager.getInstance(getContext());
+        JSObject o = new JSObject();
+        boolean supported = m.isRequestPinAppWidgetSupported();
+        o.put("supported", supported);
+        o.put("requested", supported && m.requestPinAppWidget(
+                new android.content.ComponentName(getContext(), PodcastWidget.class), null, null));
+        call.resolve(o);
+    }
+
     // --- scheduled backup -----------------------------------------------------
 
     private JSObject backupSettings() {

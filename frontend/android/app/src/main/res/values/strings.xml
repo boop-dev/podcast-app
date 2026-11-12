@@ -2,6 +2,7 @@
 <resources>
     <string name="app_name">Podcasts</string>
     <string name="title_activity_main">Podcasts</string>
+    <string name="widget_description">Now playing, with play / pause and skip buttons</string>
     <string name="package_name">dev.boop.podcastapp</string>
     <string name="custom_url_scheme">dev.boop.podcastapp</string>
 </resources>

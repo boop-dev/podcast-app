@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home-screen widget: warm paper by day, warm charcoal at night (same palette as the app). -->
+<resources>
+    <color name="widget_bg">#FFFFFF</color>
+    <color name="widget_ink">#231C16</color>
+    <color name="widget_muted">#7B7066</color>
+    <color name="widget_accent">#D9480F</color>
+    <color name="widget_accent_ink">#FFFFFF</color>
+</resources>

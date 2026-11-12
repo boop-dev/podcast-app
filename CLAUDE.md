@@ -90,6 +90,12 @@ The owner uses wireless debugging, and the port changes every time it is toggled
   and `BackupWorker` copies it to the folder the user picked (Storage Access Framework, so cloud drives work).
   Backups therefore reflect the last time the app was open. In git-bash, adb paths like `/sdcard/...` get mangled:
   prefix the command with `MSYS_NO_PATHCONV=1`.
+- Home-screen widget (`PodcastWidget`): redrawn from `AudioController.notifyChange()` (debounced), reads state from the
+  live player, or from the saved resume data when the process is new. Play / pause is a media-button broadcast to Media3's
+  `MediaButtonReceiver` (so it also restarts the service after the process died); the skips use `WidgetActionReceiver`.
+  To test the dead-process path use `adb shell am kill dev.boop.podcastapp`: `force-stop` replaces widgets with a grey
+  loading placeholder, so taps then hit nothing. Add the widget from Settings > Home screen (launcher dialog), and
+  remove it after testing (long-press > Remove).
 - `install:phone` kills the running app, so playback stops after each install.
 - `versionCode` is the git commit count. After committing, an older debug APK on disk is a "downgrade" and
   `adb install -r` refuses it (`INSTALL_FAILED_VERSION_DOWNGRADE`): rebuild with `npm run install:phone`.

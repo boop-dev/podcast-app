@@ -36,6 +36,16 @@ export default function Settings({ onChanged }) {
   const jobs = useDownloads()
   const [capGb, setCap] = useState(0)
   const [appInfo, setAppInfo] = useState(null)
+  async function addWidget() {
+    try {
+      const r = await NativeAudio.requestPinWidget()
+      if (!r.supported) setMsg('Your launcher cannot add widgets from an app. Long-press the home screen, choose Widgets, and find Podcasts.')
+      else if (!r.requested) setMsg('The launcher did not accept the request. Long-press the home screen and add the Podcasts widget there.')
+    } catch (err) {
+      setMsg(`Could not add the widget: ${err.message}`)
+    }
+  }
+
   const [theme, setThemeState] = useState(getTheme)
   const changeTheme = (value) => {
     setThemeState(value)
@@ -159,6 +169,15 @@ export default function Settings({ onChanged }) {
   return (
     <div>
       <ListeningStats />
+
+      <h2 className="section">Home screen</h2>
+      <div className="setting-row" style={{ cursor: 'default' }}>
+        <span>
+          Widget
+          <small>Now playing, with play / pause and skip buttons.</small>
+        </span>
+        <button className="pill primary" onClick={addWidget}>Add</button>
+      </div>
 
       <h2 className="section">Appearance</h2>
       <div className="setting-row">
