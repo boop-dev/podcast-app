@@ -178,6 +178,10 @@ export default function Settings({ onChanged }) {
         </span>
         <button className="pill primary" onClick={addWidget}>Add</button>
       </div>
+      <p className="muted">
+        Android Auto: Podcasts appears on your car screen with Continue listening, Up next and your shows. It shows
+        what the app knew the last time you used it.
+      </p>
 
       <h2 className="section">Appearance</h2>
       <div className="setting-row">

@@ -96,6 +96,19 @@ The owner uses wireless debugging, and the port changes every time it is toggled
   To test the dead-process path use `adb shell am kill dev.boop.podcastapp`: `force-stop` replaces widgets with a grey
   loading placeholder, so taps then hit nothing. Add the widget from Settings > Home screen (launcher dialog), and
   remove it after testing (long-press > Remove).
+- Android Auto: `PlaybackService` is a `MediaLibraryService`. The browse tree (Continue listening / Up next / Shows >
+  episodes, plus search) is served from `files/library.json`, a snapshot the app stages (`lib/autoLibrary.js`,
+  `LibrarySnapshot.java`) whenever it is used, so the car shows what the app knew the last time it was open. `onConnect`
+  must grant `DEFAULT_SESSION_AND_LIBRARY_COMMANDS`, or Android Auto is refused at the root and spins forever.
+  Testing without a car uses Google's Desktop Head Unit: `sdkmanager "extras;google;auto"` (needs JDK 21), then on the
+  phone open Android Auto settings (`am start -n com.google.android.projection.gearhead/.companion.settings.DefaultSettingsActivity`),
+  tap "Version" until "Allow development settings?" appears, then menu > Developer settings > tick "Unknown sources"
+  (debug builds are hidden otherwise), then menu > "Start head unit server". Run `adb forward tcp:5277 tcp:5277`, then
+  `(sleep 1200) | desktop-head-unit.exe` in the background (it exits at once without an open stdin). Tools cannot see
+  the DHU window: capture it with PowerShell `CopyFromScreen` on its window rect and click with `SetCursorPos` +
+  `mouse_event`. If Android Auto crashes with "Already connected", `am force-stop com.google.android.projection.gearhead`
+  and start the server again. Afterwards untick Unknown sources and choose "Quit developer mode", and note the phone
+  may be rotated (auto-rotate) so screenshots can be 2244x1008.
 - `install:phone` kills the running app, so playback stops after each install.
 - `versionCode` is the git commit count. After committing, an older debug APK on disk is a "downgrade" and
   `adb install -r` refuses it (`INSTALL_FAILED_VERSION_DOWNGRADE`): rebuild with `npm run install:phone`.

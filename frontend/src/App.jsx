@@ -9,6 +9,7 @@ import * as store from './mobile/store'
 import { episodeIdFor } from './mobile/store'
 import { parseSharedLink } from './lib/shareTarget'
 import { stageBackupSoon } from './lib/autoBackup'
+import { stageLibrarySoon } from './lib/autoLibrary'
 import { handleBack } from './lib/back'
 import { NativeAudio } from './lib/nativeAudio'
 import { refreshFeedWatchList } from './lib/feedWatch'
@@ -127,10 +128,17 @@ export default function App() {
         running = false
       }
     }
-    sync().then(() => stageBackupSoon(8000))
+    sync().then(() => {
+      stageBackupSoon(8000)
+      stageLibrarySoon(8000)
+    })
     const onVisible = () => {
       if (document.visibilityState === 'visible') sync()
-      else stageBackupSoon(0) // leaving the app: the page may be frozen soon, so stage the latest data now
+      else {
+        // Leaving the app: the page may be frozen soon, so stage the latest data now (backup + car screen).
+        stageBackupSoon(0)
+        stageLibrarySoon(0)
+      }
     }
     document.addEventListener('visibilitychange', onVisible)
     // A notification button was pressed while the app was already open.

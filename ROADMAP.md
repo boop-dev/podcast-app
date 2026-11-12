@@ -104,7 +104,7 @@ and decide on detection only after a feasibility spike.
 ## Platform
 
 - [x] Home-screen widget — L
-- [ ] Android Auto — L
+- [x] Android Auto — L
 - [x] Share target for podcast links — M
 - [x] Edge-to-edge insets and tablet layout — M
 

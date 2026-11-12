@@ -636,6 +636,12 @@ public final class AudioController {
         }
     }
 
+    /** The newest position recorded natively for an episode and not yet handed to JS, or -1. */
+    public long dirtyPosition(String id) {
+        JSONObject o = dirty.optJSONObject(id);
+        return o == null || o.optBoolean("completed") ? -1 : o.optLong("positionMs", -1);
+    }
+
     /** The running controller, or null if none was created in this process (does not create one). */
     @Nullable
     public static synchronized AudioController peek() {

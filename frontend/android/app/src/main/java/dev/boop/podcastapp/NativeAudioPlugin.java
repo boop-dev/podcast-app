@@ -317,6 +317,27 @@ public class NativeAudioPlugin extends Plugin {
         call.resolve(o);
     }
 
+    /** The app hands over a snapshot of the library for Android Auto (served by LibrarySnapshot). */
+    @PluginMethod
+    public void stageLibrary(PluginCall call) {
+        String json = call.getString("json");
+        if (json == null || json.isEmpty()) {
+            call.reject("json is required");
+            return;
+        }
+        try {
+            java.io.File dir = getContext().getFilesDir();
+            java.io.File tmp = new java.io.File(dir, LibrarySnapshot.FILE + ".tmp");
+            try (java.io.FileOutputStream out = new java.io.FileOutputStream(tmp)) {
+                out.write(json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+            if (!tmp.renameTo(new java.io.File(dir, LibrarySnapshot.FILE))) throw new java.io.IOException("rename failed");
+            call.resolve();
+        } catch (java.io.IOException e) {
+            call.reject(e.getMessage());
+        }
+    }
+
     // --- scheduled backup -----------------------------------------------------
 
     private JSObject backupSettings() {
